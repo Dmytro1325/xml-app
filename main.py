@@ -16,8 +16,11 @@ XML_DIR = "/httpdocs/XML_prices/google_sheet_to_xml"
 MASTER_SHEET_ID = "1z16Xcj_58R2Z-JGOMuyx4GpVdQqDn1UtQirCxOrE_hc"
 
 # Отримуємо змінні середовища
-GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")
-TOKEN_JSON = os.getenv("TOKEN_JSON")
+if os.getenv("GOOGLE_CREDENTIALS") is None or os.getenv("TOKEN_JSON") is None:
+    raise ValueError("❌ Помилка! Змінні середовища GOOGLE_CREDENTIALS або TOKEN_JSON відсутні!")
+
+TOKEN_FILE = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
+CREDENTIALS_FILE = json.loads(os.getenv("TOKEN_JSON"))
 
 # Перевіряємо, чи встановлені змінні
 if not GOOGLE_CREDENTIALS or not TOKEN_JSON:
