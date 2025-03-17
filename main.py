@@ -20,10 +20,9 @@ TOKEN_JSON = os.getenv("TOKEN_JSON")
 
 if not GOOGLE_CREDENTIALS or not TOKEN_JSON:
     raise ValueError("❌ Помилка! Змінні середовища GOOGLE_CREDENTIALS або TOKEN_JSON відсутні!")
-
 try:
-    TOKEN_FILE = json.loads(GOOGLE_CREDENTIALS)
-    CREDENTIALS_FILE = json.loads(TOKEN_JSON)
+    TOKEN_FILE = json.loads(TOKEN_JSON)
+    CREDENTIALS_FILE = json.loads(GOOGLE_CREDENTIALS)
 except json.JSONDecodeError as e:
     raise ValueError(f"❌ Помилка парсингу JSON: {e}")
 
