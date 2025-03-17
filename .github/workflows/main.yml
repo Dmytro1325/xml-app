@@ -1,0 +1,31 @@
+name: Deploy Docker Container
+
+on:
+  push:
+    branches:
+      - main  # Запускати при пуші в main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout репозиторій
+      uses: actions/checkout@v3
+
+    - name: Створити `.env` файл з секретами
+      run: |
+        echo 'GOOGLE_CREDENTIALS=${{ secrets.GOOGLE_CREDENTIALS }}' >> .env
+        echo 'TOKEN_JSON=${{ secrets.TOKEN_JSON }}' >> .env
+
+    - name: Перевірити вміст `.env`
+      run: cat .env
+
+    - name: Побудувати Docker-образ
+      run: docker build -t xml-app .
+
+    - name: Запустити контейнер
+      run: |
+        docker run -d --name xml_container \
+          --env-file .env \
+          xml-app
