@@ -3,29 +3,38 @@ name: Deploy Docker Container
 on:
   push:
     branches:
-      - main  # Запускати при пуші в main
+      - main  # Запускати деплой при пуші в main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout репозиторій
+    - name: 📥 Клонування репозиторію
       uses: actions/checkout@v3
 
-    - name: Створити `.env` файл з секретами
+    - name: 🔑 Логін у Docker Hub
+      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+    - name: 🛠 Створення `.env` з GitHub Secrets
       run: |
-        echo 'GOOGLE_CREDENTIALS=${{ secrets.GOOGLE_CREDENTIALS }}' >> .env
+        echo 'GOOGLE_CREDENTIALS=${{ secrets.GOOGLE_CREDENTIALS }}' > .env
         echo 'TOKEN_JSON=${{ secrets.TOKEN_JSON }}' >> .env
 
-    - name: Перевірити вміст `.env`
-      run: cat .env
+    - name: 📦 Побудова Docker-образу
+      run: docker build -t ${{ secrets.DOCKER_USERNAME }}/xml-app:latest .
 
-    - name: Побудувати Docker-образ
-      run: docker build -t xml-app .
+    - name: 🚀 Публікація Docker-образу в Docker Hub
+      run: docker push ${{ secrets.DOCKER_USERNAME }}/xml-app:latest
 
-    - name: Запустити контейнер
+    - name: 🛠 Видалення старого контейнера (якщо існує)
+      run: |
+        docker stop xml_container || true
+        docker rm xml_container || true
+
+    - name: 🚀 Запуск нового контейнера
       run: |
         docker run -d --name xml_container \
           --env-file .env \
-          xml-app
+          -p 8000:8000 \
+          ${{ secrets.DOCKER_USERNAME }}/xml-app:latest
