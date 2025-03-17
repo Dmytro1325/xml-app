@@ -15,25 +15,17 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 XML_DIR = "/httpdocs/XML_prices/google_sheet_to_xml"
 MASTER_SHEET_ID = "1z16Xcj_58R2Z-JGOMuyx4GpVdQqDn1UtQirCxOrE_hc"
 
-TOKEN_FILE = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
-CREDENTIALS_FILE = json.loads(os.getenv("TOKEN_JSON"))
+GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")
+TOKEN_JSON = os.getenv("TOKEN_JSON")
 
-# Отримуємо змінні середовища
-if os.getenv("GOOGLE_CREDENTIALS") is None or os.getenv("TOKEN_JSON") is None:
+if not GOOGLE_CREDENTIALS or not TOKEN_JSON:
     raise ValueError("❌ Помилка! Змінні середовища GOOGLE_CREDENTIALS або TOKEN_JSON відсутні!")
 
-
-
-# Перевіряємо, чи встановлені змінні
-if not GOOGLE_CREDENTIALS or not TOKEN_JSON:
-    raise ValueError("❌ Помилка: GOOGLE_CREDENTIALS або TOKEN_JSON не встановлені!")
-
-# Завантажуємо JSON-дані з змінних середовища
 try:
-    CREDENTIALS_FILE = json.loads(GOOGLE_CREDENTIALS)
-    TOKEN_FILE = json.loads(TOKEN_JSON)
+    TOKEN_FILE = json.loads(GOOGLE_CREDENTIALS)
+    CREDENTIALS_FILE = json.loads(TOKEN_JSON)
 except json.JSONDecodeError as e:
-    raise ValueError(f"❌ Помилка декодування JSON: {e}")
+    raise ValueError(f"❌ Помилка парсингу JSON: {e}")
 
 app = FastAPI(
     title="Google Sheets to XML API",
