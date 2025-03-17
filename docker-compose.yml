@@ -1,7 +1,7 @@
 services:
   fastapi_app:
     build: .
-    container_name: fastapi_google_sheet_to_xml
+    container_name: xml_container
     restart: always
     environment:
       - GOOGLE_CREDENTIALS=${GOOGLE_CREDENTIALS}
