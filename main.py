@@ -14,8 +14,21 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 # Конфігурація
 XML_DIR = "/httpdocs/XML_prices/google_sheet_to_xml"
 MASTER_SHEET_ID = "1z16Xcj_58R2Z-JGOMuyx4GpVdQqDn1UtQirCxOrE_hc"
-TOKEN_FILE = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
-CREDENTIALS_FILE = json.loads(os.getenv("TOKEN_JSON"))
+
+# Отримуємо змінні середовища
+GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")
+TOKEN_JSON = os.getenv("TOKEN_JSON")
+
+# Перевіряємо, чи встановлені змінні
+if not GOOGLE_CREDENTIALS or not TOKEN_JSON:
+    raise ValueError("❌ Помилка: GOOGLE_CREDENTIALS або TOKEN_JSON не встановлені!")
+
+# Завантажуємо JSON-дані з змінних середовища
+try:
+    CREDENTIALS_FILE = json.loads(GOOGLE_CREDENTIALS)
+    TOKEN_FILE = json.loads(TOKEN_JSON)
+except json.JSONDecodeError as e:
+    raise ValueError(f"❌ Помилка декодування JSON: {e}")
 
 app = FastAPI(
     title="Google Sheets to XML API",
@@ -27,28 +40,31 @@ app = FastAPI(
 
 process_status = {"running": False, "last_update": "", "files_created": 0}
 
+
 # Авторизація в Google Sheets
 def get_google_client():
     creds = None
-    if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE)
+
+    if TOKEN_FILE:
+        creds = Credentials.from_authorized_user_info(TOKEN_FILE)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())  # Оновлення токена
             print("🔄 Токен оновлено")
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, ["https://www.googleapis.com/auth/spreadsheets"])
+            flow = InstalledAppFlow.from_client_config(CREDENTIALS_FILE, ["https://www.googleapis.com/auth/spreadsheets"])
             creds = flow.run_local_server(port=8080)
             print("✅ Новий токен отримано")
 
-        with open(TOKEN_FILE, "w") as token:
-            token.write(creds.to_json())
+        return gspread.authorize(creds)
 
     return gspread.authorize(creds)
 
+
 client = get_google_client()
 spreadsheet = client.open_by_key(MASTER_SHEET_ID)
+
 
 # Функція для отримання значень із Google Sheets
 def safe_get_value(row, column_letter, default_value="-"):
@@ -62,6 +78,7 @@ def safe_get_value(row, column_letter, default_value="-"):
         print(f"⚠️ Помилка отримання значення ({column_letter}): {e}")
     return default_value
 
+
 # Очищення цін від зайвих символів
 def clean_price(value):
     try:
@@ -72,6 +89,7 @@ def clean_price(value):
     except Exception as e:
         print(f"⚠️ Помилка обробки ціни: {value} - {e}")
         return "0"
+
 
 # Функція для генерації XML
 def create_xml(supplier_id, supplier_name, sheet_id, columns):
@@ -134,6 +152,7 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns):
     except gspread.exceptions.APIError as e:
         print(f"❌ Помилка доступу до таблиці {supplier_name} ({sheet_id})! {e}")
 
+
 # Функція для запуску генерації XML у фоні
 def generate_xml():
     global process_status
@@ -153,14 +172,17 @@ def generate_xml():
     process_status["running"] = False
     process_status["last_update"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
+
 # Головна сторінка
 @app.get("/XML_prices/google_sheet_to_xml/")
 def home():
     return {"status": "Google Sheet to XML API працює"}
 
+
 @app.get("/XML_prices/google_sheet_to_xml/status")
 def status():
     return {"running": process_status["running"], "message": "FastAPI is working!"}
+
 
 @app.post("/XML_prices/google_sheet_to_xml/generate")
 def generate():
@@ -168,10 +190,12 @@ def generate():
     thread.start()
     return {"status": "Генерація XML запущена"}
 
+
 @app.get("/XML_prices/google_sheet_to_xml/files")
 def list_files():
     files = [f for f in os.listdir(XML_DIR) if f.endswith(".xml")]
     return {"files": files}
+
 
 @app.get("/XML_prices/google_sheet_to_xml/download/{filename}")
 def download_file(filename: str):
