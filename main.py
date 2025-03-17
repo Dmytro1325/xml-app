@@ -12,8 +12,14 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 
 # Конфігурація
-XML_DIR = "/httpdocs/XML_prices/google_sheet_to_xml"
 MASTER_SHEET_ID = "1z16Xcj_58R2Z-JGOMuyx4GpVdQqDn1UtQirCxOrE_hc"
+XML_DIR = "./output"
+
+# Перевірка, чи існує папка, і створення, якщо її немає
+if not os.path.exists(XML_DIR):
+    os.makedirs(XML_DIR)
+    print(f"📂 Створено папку для збереження XML: {XML_DIR}")
+
 
 GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")
 TOKEN_JSON = os.getenv("TOKEN_JSON")
@@ -85,6 +91,10 @@ def clean_price(value):
     except Exception as e:
         print(f"⚠️ Помилка обробки ціни: {value} - {e}")
         return "0"
+
+if not os.path.exists(XML_DIR):
+    os.makedirs(XML_DIR)
+
 
 
 # Функція для генерації XML
