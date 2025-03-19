@@ -10,6 +10,9 @@ COPY . /app
 # Створюємо папку для збереження XML-файлів
 RUN mkdir -p /app/output
 
+# Переконуємось, що папка `templates/` існує
+RUN mkdir -p /app/templates
+
 # Встановлюємо залежності
 RUN pip install --no-cache-dir -r requirements.txt
 

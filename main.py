@@ -11,6 +11,10 @@ import re
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
+from fastapi.templating import Jinja2Templates
+from fastapi.requests import Request
+from fastapi.responses import HTMLResponse
+
 
 # Конфігурація
 MASTER_SHEET_ID = "1z16Xcj_58R2Z-JGOMuyx4GpVdQqDn1UtQirCxOrE_hc"
@@ -43,6 +47,23 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Ініціалізація шаблонів
+templates = Jinja2Templates(directory="templates")
+
+@app.get("/output/", response_class=HTMLResponse)
+def list_output_files(request: Request):
+    """
+    Генерує HTML-сторінку зі списком файлів у папці /output/
+    """
+    try:
+        files = os.listdir(XML_DIR)
+        files = sorted(files)  # Сортуємо за алфавітом
+    except FileNotFoundError:
+        files = []
+
+    return templates.TemplateResponse("file_list.html", {"request": request, "files": files})
+
 
 app.mount("/output", StaticFiles(directory=XML_DIR, html=True), name="output")
 
