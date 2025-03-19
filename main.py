@@ -16,11 +16,14 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 MASTER_SHEET_ID = "1z16Xcj_58R2Z-JGOMuyx4GpVdQqDn1UtQirCxOrE_hc"
 XML_DIR = "/app/output"
 
+
+
 # Перевірка, чи існує папка, і створення, якщо її немає
 if not os.path.exists(XML_DIR):
     os.makedirs(XML_DIR)
     print(f"📂 Створено папку для збереження XML: {XML_DIR}")
 
+app.mount("/app/output", StaticFiles(directory=XML_DIR, html=True), name="output")
 
 GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")
 TOKEN_JSON = os.getenv("TOKEN_JSON")
@@ -42,7 +45,7 @@ app = FastAPI(
 )
 
 
-app.mount("/app/output", StaticFiles(directory=XML_DIR, html=True), name="output")
+
 
 
 process_status = {"running": False, "last_update": "", "files_created": 0}
