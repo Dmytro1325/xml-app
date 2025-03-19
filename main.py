@@ -42,7 +42,7 @@ app = FastAPI(
 )
 
 
-app.mount("/output", StaticFiles(directory=XML_DIR, html=True), name="output")
+app.mount("/app/output", StaticFiles(directory=XML_DIR, html=True), name="output")
 
 
 process_status = {"running": False, "last_update": "", "files_created": 0}
