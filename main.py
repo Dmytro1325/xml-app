@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 import os
 import threading
 import gspread
@@ -39,6 +40,8 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+app.mount("/output", StaticFiles(directory=XML_DIR), name="output")
 
 process_status = {"running": False, "last_update": "", "files_created": 0}
 
