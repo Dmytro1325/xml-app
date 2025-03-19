@@ -10,3 +10,4 @@ services:
       - "8080:8080"
     volumes:
       - ./httpdocs/XML_prices/google_sheet_to_xml:/httpdocs/XML_prices/google_sheet_to_xml
+      - ./httpdocs/output:/httpdocs/output 
