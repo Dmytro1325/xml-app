@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 import json
 import time
 import re
-from google.auth.transport.requests import Request
+from google.auth.transport.requests import AuthorizedSession
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from fastapi.templating import Jinja2Templates
@@ -81,16 +81,16 @@ def get_google_client():
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())  # Оновлення токена
+            session = AuthorizedSession(creds)  # Використовуємо AuthorizedSession
+            creds.refresh(session)  # Оновлення токена через сесію
             print("🔄 Токен оновлено")
         else:
             flow = InstalledAppFlow.from_client_config(CREDENTIALS_FILE, ["https://www.googleapis.com/auth/spreadsheets"])
             creds = flow.run_local_server(port=8080)
             print("✅ Новий токен отримано")
 
-        return gspread.authorize(creds)
-
     return gspread.authorize(creds)
+
 
 
 client = get_google_client()
