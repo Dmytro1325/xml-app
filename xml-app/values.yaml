@@ -1,0 +1,44 @@
+replicaCount: 1
+
+image:
+  repository: your-docker-username/xml-app
+  pullPolicy: Always
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+securityContext: {}
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 1Gi
+
+env:
+  # Базові змінні
+  GOOGLE_CREDENTIALS: ""
+  TOKEN_JSON: ""
+  # Додаткові змінні можна додавати у форматі:
+  # НАЗВА_ЗМІННОЇ: "значення"
+  # Наприклад:
+  # DEBUG: "true"
+  # API_KEY: "your-api-key"
