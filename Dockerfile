@@ -7,8 +7,8 @@ WORKDIR /app
 # Копіюємо всі файли у контейнер
 COPY . /app
 
-# Створюємо папку для збереження XML-файлів (на випадок, якщо її немає)
-RUN mkdir -p /httpdocs/output
+# Створюємо папку для збереження XML-файлів
+RUN mkdir -p /app/output
 
 # Встановлюємо залежності
 RUN pip install --no-cache-dir -r requirements.txt

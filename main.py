@@ -14,7 +14,6 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 
 # Конфігурація
 MASTER_SHEET_ID = "1z16Xcj_58R2Z-JGOMuyx4GpVdQqDn1UtQirCxOrE_hc"
-XML_DIR = "./output"
 
 # Перевірка, чи існує папка, і створення, якщо її немає
 if not os.path.exists(XML_DIR):
@@ -41,7 +40,9 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-app.mount("/output", StaticFiles(directory=XML_DIR), name="output")
+XML_DIR = "/app/output"
+app.mount("/output", StaticFiles(directory=XML_DIR, html=True), name="output")
+
 
 process_status = {"running": False, "last_update": "", "files_created": 0}
 
