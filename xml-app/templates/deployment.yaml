@@ -25,7 +25,14 @@ spec:
           env:
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
+              {{- if kindIs "map" $value }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $value.secretName }}
+                  key: {{ $value.secretKey }}
+              {{- else }}
               value: {{ $value | quote }}
+              {{- end }}
             {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
