@@ -37,7 +37,7 @@ env:
   # Базові змінні
   GOOGLE_CREDENTIALS:
     secretName: google-secrets
-    secretKey: google-credentials
+    secretKey: google-xml-secrets
   TOKEN_JSON:
     secretName: google-secrets
     secretKey: token-json
