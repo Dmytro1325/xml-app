@@ -36,10 +36,10 @@ persistence:
 env:
   # Базові змінні
   GOOGLE_CREDENTIALS:
-    secretName: google-xml-secrets
+    secretName: google-secrets
     secretKey: google-credentials
   TOKEN_JSON:
-    secretName: google-xml-secrets
+    secretName: google-secrets
     secretKey: token-json
   # Додаткові змінні можна додавати у форматі:
   # НАЗВА_ЗМІННОЇ: "значення"
