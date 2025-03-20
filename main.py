@@ -144,38 +144,23 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns):
 async def periodic_update():
     while True:
         log_to_file("🔄 [Auto-Update] Початок перевірки змін у Google Sheets...")
-
-        retry_count = 0
-        max_retries = 5  # Максимальна кількість повторних спроб
-        supplier_data = None  # Дані постачальників
-
-        while retry_count < max_retries:
-            try:
-                supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
-                break  # Виходимо з циклу, якщо запит вдався
-            except gspread.exceptions.APIError as e:
-                if "429" in str(e):
-                    retry_count += 1
-                    wait_time = (2 ** retry_count) + random.uniform(1, 3)  # 2, 4, 8, 16 секунд...
-                    log_to_file(f"⚠️ Ліміт перевищено. Повторна спроба {retry_count}/{max_retries} через {wait_time:.1f} сек...")
-                    await asyncio.sleep(wait_time)  # Очікуємо перед повторною спробою
-                else:
-                    log_to_file(f"❌ Помилка доступу до головної таблиці: {e}")
-                    return  # Завершуємо функцію, якщо це інша помилка
-
-        if supplier_data is None:
-            log_to_file("❌ Всі спроби отримати дані з Google Sheets провалилися.")
+        try:
+            supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
+        except gspread.exceptions.APIError as e:
+            log_to_file(f"❌ Помилка доступу до головної таблиці: {e}")
             await asyncio.sleep(UPDATE_INTERVAL)
-            continue  # Продовжуємо до наступного циклу оновлення
+            continue
 
         for supplier in supplier_data:
             create_xml(
-                str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"],
-                {"ID": "A", "Name": "B", "Price": "D"}
+                str(supplier["Post_ID"]),
+                supplier["Supplier Name"],
+                supplier["Google Sheet ID"],
+                {"ID": "A", "Name": "B", "Price": "D"},
             )
 
         log_to_file("✅ [Auto-Update] Перевірку завершено, очікуємо наступний цикл...")
-        await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо перед наступним оновленням
+        await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо 30 хвилин
 
 # 🔹 API
 app = FastAPI()
