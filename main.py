@@ -100,14 +100,16 @@ async def periodic_update():
             create_xml(str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"])
         await asyncio.sleep(UPDATE_INTERVAL)
 
+# API
+app = FastAPI()
+templates = Jinja2Templates(directory="/app/templates")
+app.mount("/output", StaticFiles(directory=XML_DIR, html=True), name="output")        
+
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(periodic_update())
 
-# API
-app = FastAPI()
-templates = Jinja2Templates(directory="/app/templates")
-app.mount("/output", StaticFiles(directory=XML_DIR, html=True), name="output")
+
 
 @app.get("/logs/", response_class=HTMLResponse)
 def list_logs(request: Request):
