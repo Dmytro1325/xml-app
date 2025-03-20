@@ -19,7 +19,7 @@ from google.auth.transport.requests import Request as GoogleRequest
 
 # Конфігурація
 MASTER_SHEET_ID = "1z16Xcj_58R2Z-JGOMuyx4GpVdQqDn1UtQirCxOrE_hc"
-XML_DIR = "/app/output"
+XML_DIR = "/output"
 UPDATE_INTERVAL = 1800  # 30 хвилин
 SUCCESS_LOG_DIR = "/app/logs/success_logs"
 ERROR_LOG_DIR = "/app/logs/error_logs"
