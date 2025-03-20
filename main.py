@@ -105,6 +105,26 @@ app = FastAPI()
 templates = Jinja2Templates(directory="/app/templates")
 app.mount("/output", StaticFiles(directory=XML_DIR, html=True), name="output")        
 
+
+# Ініціалізація шаблонів
+templates = Jinja2Templates(directory="/app/templates")
+
+@app.get("/output/", response_class=HTMLResponse)
+def list_output_files(request: Request):
+    """
+    Генерує HTML-сторінку зі списком файлів у папці /output/
+    """
+    try:
+        files = os.listdir(XML_DIR)
+        files = sorted(files)  # Сортуємо за алфавітом
+    except FileNotFoundError:
+        files = []
+
+    return templates.TemplateResponse("file_list.html", {"request": request, "files": files})
+
+
+app.mount("/output", StaticFiles(directory=XML_DIR, html=True), name="output")
+
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(periodic_update())
