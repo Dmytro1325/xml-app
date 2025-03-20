@@ -144,16 +144,15 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns):
 
 def get_price_hash(sheet):
     """
-    Обчислює хеш-код для даних у першому аркуші Google Sheets.
-    Використовується для визначення, чи змінився вміст таблиці.
+    Генерує хеш для даних з Google Sheets, щоб визначити, чи змінилися вони.
     """
     try:
         data = sheet.get_all_values()
-        data_str = "\n".join([",".join(row) for row in data])  # Перетворюємо у рядок
-        return hashlib.md5(data_str.encode()).hexdigest()  # Генеруємо хеш MD5
+        data_str = json.dumps(data, sort_keys=True)  # Конвертуємо в JSON
+        return hashlib.md5(data_str.encode()).hexdigest()  # Повертаємо MD5-хеш
     except Exception as e:
-        log_to_file(f"⚠️ Помилка при обчисленні хешу: {e}")
-        return None  # У разі помилки повертаємо None
+        log_to_file(f"⚠️ Помилка генерації хешу для {sheet.title}: {e}")
+        return None
 
 async def periodic_update():
     """
@@ -167,7 +166,7 @@ async def periodic_update():
             supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
         except gspread.exceptions.APIError as e:
             log_to_file(f"❌ Помилка доступу до головної таблиці: {e}")
-            await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо 30 хвилин
+            await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо перед новою спробою
             continue
 
         updated_suppliers = []
@@ -186,30 +185,42 @@ async def periodic_update():
                     log_to_file(f"⚠️ {supplier_name}: Пропускаємо, бо в попередньому циклі було перевищено ліміт API.")
                     continue
 
-                try:
-                    sheet = client.open_by_key(sheet_id).sheet1
-                    await asyncio.sleep(5)  # Запобігаємо перевантаженню API
-                    
-                    new_hash = get_price_hash(sheet)
+                retry_count = 0
+                max_retries = 5  # Повторюємо до 5 разів у разі помилки
 
-                    if supplier_id in price_hash_cache and price_hash_cache[supplier_id] == new_hash:
-                        log_to_file(f"⏭️ {supplier_name}: Немає змін, пропускаємо...")
-                        continue
+                while retry_count < max_retries:
+                    try:
+                        sheet = client.open_by_key(sheet_id).sheet1
+                        await asyncio.sleep(random.uniform(2, 5))  # Запобігаємо перевантаженню API
+                        
+                        new_hash = get_price_hash(sheet)
 
-                    price_hash_cache[supplier_id] = new_hash  # Оновлюємо кеш
-                    create_xml(supplier_id, supplier_name, sheet_id, {"ID": "A", "Name": "B", "Price": "D"})
-                    updated_suppliers.append(supplier_name)
+                        if supplier_id in price_hash_cache and price_hash_cache[supplier_id] == new_hash:
+                            log_to_file(f"⏭️ {supplier_name}: Немає змін, пропускаємо...")
+                            break  # Виходимо з циклу while
 
-                except gspread.exceptions.APIError as e:
-                    if "429" in str(e):
-                        log_to_file(f"⚠️ Ліміт запитів вичерпано для {supplier_name}. Чекаємо 60 сек...")
-                        await asyncio.sleep(60)  # Чекаємо довше перед повторною спробою
-                        skipped_suppliers.append(supplier_id)  # Пропускаємо до наступного циклу
-                    else:
-                        log_to_file(f"❌ Помилка обробки {supplier_name}: {e}")
+                        price_hash_cache[supplier_id] = new_hash  # Оновлюємо кеш
+                        create_xml(supplier_id, supplier_name, sheet_id, {"ID": "A", "Name": "B", "Price": "D"})
+                        updated_suppliers.append(supplier_name)
+                        break  # Виходимо з циклу while після успішного виконання
+
+                    except gspread.exceptions.APIError as e:
+                        if "429" in str(e):
+                            retry_count += 1
+                            wait_time = retry_count * 20
+                            log_to_file(f"⚠️ Ліміт запитів вичерпано для {supplier_name}. Повторна спроба {retry_count}/{max_retries} через {wait_time} сек.")
+                            await asyncio.sleep(wait_time)  # Чекаємо перед повторною спробою
+                        else:
+                            log_to_file(f"❌ Помилка обробки {supplier_name}: {e}")
+                            break  # Виходимо з циклу while, якщо це не помилка 429
+
+                if retry_count == max_retries:
+                    log_to_file(f"❌ {supplier_name}: Всі {max_retries} спроби провалилися. Пропускаємо.")
+                    skipped_suppliers.append(supplier_id)
 
         log_to_file(f"✅ [Auto-Update] Оновлено {len(updated_suppliers)} постачальників, чекаємо на наступний цикл...")
-        await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо 30 хвилин до наступного оновлення
+        await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо перед наступною перевіркою
+
 
 
 # 🔹 API
