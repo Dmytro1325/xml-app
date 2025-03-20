@@ -210,7 +210,13 @@ def view_debug_log():
     raise HTTPException(status_code=404, detail="Файл логів не знайдено.")
 
 
-@app.get("/XML_prices/google_sheet_to_xml/generate")
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(periodic_update())
+
+
+@app.post("/XML_prices/google_sheet_to_xml/generate")
 def generate():
     threading.Thread(target=lambda: [
         create_xml(str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"], 
@@ -218,7 +224,3 @@ def generate():
         for supplier in spreadsheet.worksheet("Sheet1").get_all_records()
     ]).start()
     return {"status": "Генерація XML запущена"}
-
-@app.on_event("startup")
-async def startup_event():
-     asyncio.create_task(periodic_update())  # Викликаємо періодичне оновлення
