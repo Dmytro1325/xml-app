@@ -9,6 +9,8 @@ import json
 import time
 import re
 import requests
+import hashlib
+import asyncio
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from fastapi.templating import Jinja2Templates
@@ -17,26 +19,24 @@ from fastapi.responses import HTMLResponse
 from fastapi import Depends
 from google.auth.transport.requests import Request as GoogleRequest
 
-
-
 # Конфігурація
 MASTER_SHEET_ID = "1z16Xcj_58R2Z-JGOMuyx4GpVdQqDn1UtQirCxOrE_hc"
 XML_DIR = "/output"
+UPDATE_INTERVAL = 1800  # Оновлення кожні 30 хвилин (1800 секунд)
+price_hash_cache = {}  # Кеш для збереження хешів файлів
 
 
-
-# Перевірка, чи існує папка, і створення, якщо її немає
+# Перевірка, чи існує папка
 if not os.path.exists(XML_DIR):
     os.makedirs(XML_DIR)
     print(f"📂 Створено папку для збереження XML: {XML_DIR}")
-
-
 
 GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")
 TOKEN_JSON = os.getenv("TOKEN_JSON")
 
 if not GOOGLE_CREDENTIALS or not TOKEN_JSON:
     raise ValueError("❌ Помилка! Змінні середовища GOOGLE_CREDENTIALS або TOKEN_JSON відсутні!")
+
 try:
     TOKEN_FILE = json.loads(TOKEN_JSON)
     CREDENTIALS_FILE = json.loads(GOOGLE_CREDENTIALS)
@@ -71,13 +71,9 @@ def list_output_files(request: Request):
 app.mount("/output", StaticFiles(directory=XML_DIR, html=True), name="output")
 
 
-
 process_status = {"running": False, "last_update": "", "files_created": 0}
 
-
 # Авторизація в Google Sheets
-
-
 def get_google_client():
     creds = None
 
@@ -86,8 +82,8 @@ def get_google_client():
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            session = requests.Session()  # ✅ Правильний виклик requests.Session()
-            creds.refresh(GoogleRequest(session))  # Використовуємо правильний `Request`
+            session = requests.Session()
+            creds.refresh(GoogleRequest(session))
             print("🔄 Токен оновлено")
         else:
             flow = InstalledAppFlow.from_client_config(
@@ -99,80 +95,48 @@ def get_google_client():
 
     return gspread.authorize(creds)
 
-
-
 client = get_google_client()
 spreadsheet = client.open_by_key(MASTER_SHEET_ID)
 
-
-# Функція для отримання значень із Google Sheets
-def safe_get_value(row, column_letter, default_value="-"):
+# Функція для отримання хешу таблиці
+def get_price_hash(sheet):
     try:
-        if column_letter and column_letter.isalpha():
-            col_index = ord(column_letter.upper()) - 65  # A -> 0, B -> 1, C -> 2 ...
-            if len(row) > col_index:
-                value = str(row[col_index]).strip()
-                return value if value else default_value
+        data = sheet.get_all_values()
+        data_str = json.dumps(data, ensure_ascii=False)
+        return hashlib.md5(data_str.encode()).hexdigest()
     except Exception as e:
-        print(f"⚠️ Помилка отримання значення ({column_letter}): {e}")
-    return default_value
+        print(f"⚠️ Помилка отримання даних: {e}")
+        return None
 
-
-# Очищення цін від зайвих символів
-def clean_price(value):
-    try:
-        if not value:
-            return "0"
-        value = re.sub(r"[^\d,\.]", "", value)
-        return value.split(",")[0] if "," in value else value.split(".")[0] if "." in value else value
-    except Exception as e:
-        print(f"⚠️ Помилка обробки ціни: {value} - {e}")
-        return "0"
-
-if not os.path.exists(XML_DIR):
-    os.makedirs(XML_DIR)
-
-
-
-# Функція для генерації XML
+# Функція генерації XML
 def create_xml(supplier_id, supplier_name, sheet_id, columns):
     xml_file = os.path.join(XML_DIR, f"{supplier_id}.xml")
 
-    if os.path.exists(xml_file):
-        print(f"⏭️ Пропускаємо {supplier_name} (XML вже існує)")
-        return
-
-    print(f"📥 Обробляємо: {supplier_name} ({sheet_id})")
+    print(f"📥 Обробка: {supplier_name} ({sheet_id})")
 
     try:
         spreadsheet = client.open_by_key(sheet_id)
         sheets = spreadsheet.worksheets()
         combined_data = []
 
-        print(f"🔹 Знайдено {len(sheets)} аркуш(ів) у {supplier_name}")
-
         for sheet in sheets:
-            print(f"   🔄 Обробка аркуша: {sheet.title}")
-            time.sleep(2)
             data = sheet.get_all_values()
             if len(data) < 2:
-                print(f"   ⚠️ Аркуш {sheet.title} порожній, пропускаємо...")
                 continue
             combined_data.extend(data[1:])
 
         if not combined_data:
-            print(f"⚠️ Всі аркуші у {supplier_name} порожні! Пропускаємо XML.")
+            print(f"⚠️ У {supplier_name} немає даних! Пропускаємо XML.")
             return
 
         root = ET.Element("products")
         for row in combined_data:
-            product_id = safe_get_value(row, columns["ID"], None)
-            name = safe_get_value(row, columns["Name"], None)
-            stock = safe_get_value(row, columns["Stock"], "true")
-            price = clean_price(safe_get_value(row, columns["Price"], "0"))
-            sku = safe_get_value(row, columns["SKU"], None)
-            rrp = clean_price(safe_get_value(row, columns["RRP"], None))
-            currency = safe_get_value(row, columns["Currency"], "UAH")
+            product_id = row[0] if len(row) > 0 else "-"
+            name = row[1] if len(row) > 1 else "-"
+            stock = row[2] if len(row) > 2 else "true"
+            price = row[3] if len(row) > 3 else "0"
+            sku = row[4] if len(row) > 4 else "-"
+            currency = row[5] if len(row) > 5 else "UAH"
 
             if not name or price == "0":
                 continue
@@ -185,53 +149,58 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns):
             ET.SubElement(product, "currency").text = currency
             if sku:
                 ET.SubElement(product, "sku").text = sku
-            if rrp and rrp != "0":
-                ET.SubElement(product, "rrp").text = rrp
 
         tree = ET.ElementTree(root)
         tree.write(xml_file, encoding="utf-8", xml_declaration=True)
         print(f"✅ XML {xml_file} збережено.")
 
     except gspread.exceptions.APIError as e:
-        print(f"❌ Помилка доступу до таблиці {supplier_name} ({sheet_id})! {e}")
+        print(f"❌ Помилка доступу до {supplier_name} ({sheet_id}): {e}")
 
+# Автоматичне оновлення XML
+async def periodic_update():
+    while True:
+        print("🔄 [Auto-Update] Починаємо перевірку змін у Google Sheets...")
 
-# Функція для запуску генерації XML у фоні
-def generate_xml():
-    global process_status
-    process_status["running"] = True
-    process_status["last_update"] = time.strftime("%Y-%m-%d %H:%M:%S")
-    process_status["files_created"] = 0
+        supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
+        updated_suppliers = []
 
-    supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
-    for supplier in supplier_data:
-        supplier_id = str(supplier["Post_ID"])
-        supplier_name = supplier["Supplier Name"]
-        sheet_id = supplier["Google Sheet ID"]
-        columns = {key: supplier[f"{key} Column"] for key in ["ID", "Name", "Stock", "Price", "SKU", "RRP", "Currency"]}
-        create_xml(supplier_id, supplier_name, sheet_id, columns)
-        process_status["files_created"] += 1
+        for supplier in supplier_data:
+            supplier_id = str(supplier["Post_ID"])
+            supplier_name = supplier["Supplier Name"]
+            sheet_id = supplier["Google Sheet ID"]
 
-    process_status["running"] = False
-    process_status["last_update"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            try:
+                sheet = client.open_by_key(sheet_id).sheet1
+                new_hash = get_price_hash(sheet)
 
+                if supplier_id in price_hash_cache and price_hash_cache[supplier_id] == new_hash:
+                    print(f"✅ {supplier_name}: Дані не змінилися, XML не оновлюємо")
+                else:
+                    print(f"🔄 {supplier_name}: Дані змінилися, оновлюємо XML")
+                    price_hash_cache[supplier_id] = new_hash
+                    create_xml(supplier_id, supplier_name, sheet_id, supplier)
+                    updated_suppliers.append(supplier_name)
 
-# Головна сторінка
-@app.get("/XML_prices/google_sheet_to_xml/")
-def home():
-    return {"status": "Google Sheet to XML API працює"}
+            except Exception as e:
+                print(f"❌ Помилка обробки {supplier_name}: {e}")
 
+        await asyncio.sleep(UPDATE_INTERVAL)
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(periodic_update())
+
+@app.post("/XML_prices/google_sheet_to_xml/generate")
+def generate():
+    thread = threading.Thread(target=lambda: [create_xml(s["Post_ID"], s["Supplier Name"], s["Google Sheet ID"], s) for s in spreadsheet.worksheet("Sheet1").get_all_records()])
+    thread.start()
+    return {"status": "Генерація XML запущена"}
 
 @app.get("/XML_prices/google_sheet_to_xml/status")
 def status():
     return {"running": process_status["running"], "message": "FastAPI is working!"}
 
-
-@app.post("/XML_prices/google_sheet_to_xml/generate")
-def generate():
-    thread = threading.Thread(target=generate_xml)
-    thread.start()
-    return {"status": "Генерація XML запущена"}
 
 
 @app.get("/XML_prices/google_sheet_to_xml/files")
