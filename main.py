@@ -232,7 +232,9 @@ def view_debug_log():
 
 @app.on_event("startup")
 async def startup_event():
-    asyncio.create_task(periodic_update())
+    loop = asyncio.get_event_loop()
+    loop.create_task(periodic_update())  # Запускаємо без очікування
+
 
 
 @app.post("/XML_prices/google_sheet_to_xml/generate")
