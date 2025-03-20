@@ -140,27 +140,62 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns):
 
     log_to_file(f"❌ Всі {max_retries} спроби обробити {supplier_name} провалилися.")
 
-# 🔹 Автоматичне оновлення XML
 async def periodic_update():
+    """
+    Фоновий процес, який оновлює тільки ті XML-файли, які змінилися,
+    з урахуванням кешу та обмеження на запити.
+    """
     while True:
-        log_to_file("🔄 [Auto-Update] Початок перевірки змін у Google Sheets...")
+        log_to_file("🔄 [Auto-Update] Починаємо перевірку змін у Google Sheets...")
+
         try:
             supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
         except gspread.exceptions.APIError as e:
             log_to_file(f"❌ Помилка доступу до головної таблиці: {e}")
-            await asyncio.sleep(UPDATE_INTERVAL)
+            await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо 30 хвилин
             continue
 
-        for supplier in supplier_data:
-            create_xml(
-                str(supplier["Post_ID"]),
-                supplier["Supplier Name"],
-                supplier["Google Sheet ID"],
-                {"ID": "A", "Name": "B", "Price": "D"},
-            )
+        updated_suppliers = []
+        skipped_suppliers = []
+        batch_size = 5  # Обробляємо по 5 постачальників за один цикл
 
-        log_to_file("✅ [Auto-Update] Перевірку завершено, очікуємо наступний цикл...")
-        await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо 30 хвилин
+        for i in range(0, len(supplier_data), batch_size):
+            batch = supplier_data[i:i + batch_size]
+
+            for supplier in batch:
+                supplier_id = str(supplier["Post_ID"])
+                supplier_name = supplier["Supplier Name"]
+                sheet_id = supplier["Google Sheet ID"]
+
+                if supplier_id in skipped_suppliers:
+                    log_to_file(f"⚠️ {supplier_name}: Пропускаємо, бо в попередньому циклі було перевищено ліміт API.")
+                    continue
+
+                try:
+                    sheet = client.open_by_key(sheet_id).sheet1
+                    await asyncio.sleep(5)  # Запобігаємо перевантаженню API
+                    
+                    new_hash = get_price_hash(sheet)
+
+                    if supplier_id in price_hash_cache and price_hash_cache[supplier_id] == new_hash:
+                        log_to_file(f"⏭️ {supplier_name}: Немає змін, пропускаємо...")
+                        continue
+
+                    price_hash_cache[supplier_id] = new_hash  # Оновлюємо кеш
+                    create_xml(supplier_id, supplier_name, sheet_id, {"ID": "A", "Name": "B", "Price": "D"})
+                    updated_suppliers.append(supplier_name)
+
+                except gspread.exceptions.APIError as e:
+                    if "429" in str(e):
+                        log_to_file(f"⚠️ Ліміт запитів вичерпано для {supplier_name}. Чекаємо 60 сек...")
+                        await asyncio.sleep(60)  # Чекаємо довше перед повторною спробою
+                        skipped_suppliers.append(supplier_id)  # Пропускаємо до наступного циклу
+                    else:
+                        log_to_file(f"❌ Помилка обробки {supplier_name}: {e}")
+
+        log_to_file(f"✅ [Auto-Update] Оновлено {len(updated_suppliers)} постачальників, чекаємо на наступний цикл...")
+        await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо 30 хвилин до наступного оновлення
+
 
 # 🔹 API
 app = FastAPI()
@@ -217,7 +252,8 @@ def view_debug_log():
 
 @app.on_event("startup")
 async def startup_event():
-    asyncio.create_task(periodic_update())
+    asyncio.ensure_future(periodic_update())  # Запускаємо фоновий процес оновлення XML
+
 
 
 
