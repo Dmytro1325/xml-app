@@ -67,9 +67,15 @@ spreadsheet = client.open_by_key(MASTER_SHEET_ID)
 
 # 🔹 Функція безпечного отримання значень
 def safe_get_value(row, column_letter, default_value="-"):
+    """
+    Отримує значення комірки, враховуючи колонку у форматі 'A', 'B', 'C'...
+    - Перевіряє, чи є значення в межах рядка
+    - Видаляє зайві пробіли та приховані символи
+    - Завжди повертає рядок
+    """
     try:
         if column_letter and column_letter.isalpha():
-            col_index = ord(column_letter.upper()) - 65  # A -> 0, B -> 1, C -> 2
+            col_index = ord(column_letter.upper()) - 65  # A -> 0, B -> 1, C -> 2 ...
             if len(row) > col_index:
                 value = str(row[col_index]).strip()
                 return value if value else default_value
@@ -78,22 +84,35 @@ def safe_get_value(row, column_letter, default_value="-"):
 
     return default_value
 
-# 🔹 Функція для очищення ціни
+## 🔹 Функція для очищення ціни
 def clean_price(value):
+    """
+    Очищає та форматує значення ціни:
+    - Видаляє всі нечислові символи, крім коми та крапки
+    - Якщо є десятковий роздільник, зберігає лише цілу частину
+    - Повертає значення у вигляді рядка
+    """
     try:
         if not value:
             return "0"
+
         value = re.sub(r"[^\d,\.]", "", value)
+
+        # Якщо є десятковий роздільник, залишаємо лише цілу частину
         if "," in value:
             value = value.split(",")[0]
         elif "." in value:
             value = value.split(".")[0]
+
         return value if value else "0"
+
     except Exception as e:
         log_to_file(f"⚠️ Помилка обробки ціни: {value} - {e}")
         return "0"
 
+
 # 🔹 Функція генерації XML
+# 🔹 Функція для створення XML
 def create_xml(supplier_id, supplier_name, sheet_id, columns):
     xml_file = os.path.join(XML_DIR, f"{supplier_id}.xml")
     log_to_file(f"📥 Обробка: {supplier_name} ({sheet_id})")
@@ -112,22 +131,53 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns):
                 if len(data) < 2:
                     log_to_file(f"⚠️ Аркуш {sheet.title} порожній")
                     continue
-                combined_data.extend(data[1:])
+                combined_data.extend(data[1:])  # Пропускаємо заголовки
 
             if not combined_data:
                 log_to_file(f"⚠️ {supplier_name} немає даних")
                 return
 
             root = ET.Element("products")
-            for row in combined_data:
-                product = ET.SubElement(root, "product")
-                ET.SubElement(product, "id").text = safe_get_value(row, columns["ID"], "-")
-                ET.SubElement(product, "name").text = safe_get_value(row, columns["Name"], "-")
-                ET.SubElement(product, "price").text = clean_price(safe_get_value(row, columns["Price"], "0"))
+            processed_count = 0
+            skipped_count = 0
 
+            for row in combined_data:
+                product_id = safe_get_value(row, columns.get("ID"))
+                name = safe_get_value(row, columns.get("Name"))
+                stock = safe_get_value(row, columns.get("Stock"), "true")
+                price = clean_price(safe_get_value(row, columns.get("Price"), "0"))
+                sku = safe_get_value(row, columns.get("SKU"))
+                rrp = clean_price(safe_get_value(row, columns.get("RRP")))
+                currency = safe_get_value(row, columns.get("Currency"), "UAH")
+
+                # Пропускаємо товари без обов’язкових полів
+                if not product_id or not name or not price:
+                    log_to_file(f"❌ Пропускаємо рядок: {row}, оскільки відсутні ID, Name або Price")
+                    skipped_count += 1
+                    continue
+
+                # Лог перед додаванням у XML
+                log_to_file(f"   ✅ Додаємо товар: id='{product_id}', name='{name}', price='{price}', stock='{stock}'")
+
+                product = ET.SubElement(root, "product")
+                ET.SubElement(product, "id").text = product_id
+                ET.SubElement(product, "name").text = name
+                ET.SubElement(product, "stock").text = stock
+                ET.SubElement(product, "price").text = price
+                ET.SubElement(product, "currency").text = currency
+
+                if sku:
+                    ET.SubElement(product, "sku").text = sku
+                if rrp and rrp != "0":
+                    ET.SubElement(product, "rrp").text = rrp
+
+                processed_count += 1
+
+            # Збереження XML
             ET.ElementTree(root).write(xml_file, encoding="utf-8", xml_declaration=True)
-            log_to_file(f"✅ XML {xml_file} збережено ({len(combined_data)} товарів)")
-            time.sleep(random.uniform(1.5, 2.5))
+            log_to_file(f"✅ XML {xml_file} збережено ({processed_count} товарів, пропущено {skipped_count})")
+
+            time.sleep(random.uniform(1.5, 2.5))  # Запобігаємо перевантаженню API
             return
 
         except gspread.exceptions.APIError as e:
@@ -141,6 +191,7 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns):
                 return
 
     log_to_file(f"❌ Всі {max_retries} спроби обробити {supplier_name} провалилися.")
+
 
 def get_price_hash(sheet):
     """
@@ -158,6 +209,7 @@ async def periodic_update():
     """
     Фоновий процес, який оновлює тільки ті XML-файли, які змінилися,
     з урахуванням кешу та обмеження на запити.
+    Використовує динамічний мапінг полів з головної таблиці.
     """
     while True:
         log_to_file("🔄 [Auto-Update] Починаємо перевірку змін у Google Sheets...")
@@ -166,7 +218,7 @@ async def periodic_update():
             supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
         except gspread.exceptions.APIError as e:
             log_to_file(f"❌ Помилка доступу до головної таблиці: {e}")
-            await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо перед новою спробою
+            await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо 30 хвилин
             continue
 
         updated_suppliers = []
@@ -185,6 +237,17 @@ async def periodic_update():
                     log_to_file(f"⚠️ {supplier_name}: Пропускаємо, бо в попередньому циклі було перевищено ліміт API.")
                     continue
 
+                # 📌 Динамічно отримуємо мапінг полів для кожного постачальника
+                columns = {
+                    "ID": supplier["ID Column"] if supplier["ID Column"] != "-" else None,
+                    "Name": supplier["Name Column"] if supplier["Name Column"] != "-" else None,
+                    "Stock": supplier["Stock Column"] if supplier["Stock Column"] != "-" else None,
+                    "Price": supplier["Price Column"] if supplier["Price Column"] != "-" else None,
+                    "SKU": supplier["SKU Column"] if supplier["SKU Column"] != "-" else None,
+                    "RRP": supplier["RRP Column"] if supplier["RRP Column"] != "-" else None,
+                    "Currency": supplier["Currency Column"] if supplier["Currency Column"] != "-" else None
+                }
+
                 retry_count = 0
                 max_retries = 5  # Повторюємо до 5 разів у разі помилки
 
@@ -200,7 +263,10 @@ async def periodic_update():
                             break  # Виходимо з циклу while
 
                         price_hash_cache[supplier_id] = new_hash  # Оновлюємо кеш
-                        create_xml(supplier_id, supplier_name, sheet_id, {"ID": "A", "Name": "B", "Price": "D"})
+
+                        # ✅ Використовуємо отримані **динамічні поля**
+                        create_xml(supplier_id, supplier_name, sheet_id, columns)
+
                         updated_suppliers.append(supplier_name)
                         break  # Виходимо з циклу while після успішного виконання
 
@@ -219,7 +285,7 @@ async def periodic_update():
                     skipped_suppliers.append(supplier_id)
 
         log_to_file(f"✅ [Auto-Update] Оновлено {len(updated_suppliers)} постачальників, чекаємо на наступний цикл...")
-        await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо перед наступною перевіркою
+        await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо 30 хвилин до наступної перевірки
 
 
 
