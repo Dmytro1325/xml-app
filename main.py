@@ -14,6 +14,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
 from fastapi.responses import HTMLResponse
+from fastapi import Depends
+
 
 
 # Конфігурація
@@ -73,7 +75,7 @@ process_status = {"running": False, "last_update": "", "files_created": 0}
 
 
 # Авторизація в Google Sheets
-from google.auth.transport.requests import Request
+
 
 def get_google_client():
     creds = None
@@ -243,3 +245,31 @@ def download_file(filename: str):
     if os.path.exists(file_path):
         return FileResponse(file_path, filename=filename)
     raise HTTPException(status_code=404, detail="Файл не знайдено")
+
+@app.delete("/XML_prices/google_sheet_to_xml/delete/{filename}")
+def delete_file(filename: str):
+    """
+    Видаляє конкретний файл у папці /output/
+    """
+    file_path = os.path.join(XML_DIR, filename)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        return {"status": "success", "message": f"Файл {filename} видалено."}
+    else:
+        raise HTTPException(status_code=404, detail=f"Файл {filename} не знайдено.")
+
+
+@app.delete("/XML_prices/google_sheet_to_xml/delete_all")
+def delete_all_files():
+    """
+    Видаляє всі файли у папці /output/
+    """
+    files = os.listdir(XML_DIR)
+    if not files:
+        return {"status": "success", "message": "Папка вже порожня."}
+
+    for file in files:
+        file_path = os.path.join(XML_DIR, file)
+        os.remove(file_path)
+
+    return {"status": "success", "message": "Всі файли у папці output видалено."}
