@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 import json
 import time
 import re
+import requests
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from fastapi.templating import Jinja2Templates
