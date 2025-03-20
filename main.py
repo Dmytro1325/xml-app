@@ -116,11 +116,6 @@ templates = Jinja2Templates(directory="/app/templates")
 
 
 
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(periodic_update())
-
-
 @app.get("/output/", response_class=HTMLResponse)
 def list_output_files(request: Request):
     """
@@ -134,6 +129,9 @@ def list_output_files(request: Request):
     return templates.TemplateResponse("file_list.html", {"request": request, "files": files})
 
 
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(periodic_update())
 
 
 
