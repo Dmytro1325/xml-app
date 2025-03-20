@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Логи</title>
+</head>
+<body>
+    <h2>Список логів</h2>
+    <table border="1">
+        <tr>
+            <th>Ім'я файлу</th>
+            <th>Розмір, байт</th>
+            <th>Тип</th>
+            <th>Перегляд</th>
+        </tr>
+        {% for log in logs %}
+        <tr>
+            <td>{{ log.name }}</td>
+            <td>{{ log.size }}</td>
+            <td>{{ log.type }}</td>
+            <td><a href="/logs/view/{{ log.name }}">Відкрити</a></td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
