@@ -8,13 +8,13 @@ import xml.etree.ElementTree as ET
 import json
 import time
 import re
-from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
 from fastapi.responses import HTMLResponse
 from fastapi import Depends
+from google.auth.transport.requests import Request as GoogleRequest
 
 
 
@@ -85,7 +85,8 @@ def get_google_client():
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())  # Використовуємо правильний об'єкт Request
+            session = requests.Session()
+            creds.refresh(GoogleRequest(session))  # Використовуємо правильний `Request`
             print("🔄 Токен оновлено")
         else:
             flow = InstalledAppFlow.from_client_config(
