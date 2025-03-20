@@ -24,6 +24,7 @@ XML_DIR = "/output"
 LOG_DIR = "/app/logs"
 DEBUG_LOG_FILE = os.path.join(LOG_DIR, "debug_logs", "debug_log.html")
 UPDATE_INTERVAL = 1800  # 30 хвилин
+price_hash_cache = {}
 
 # 🔹 Створення директорій
 for dir_path in [XML_DIR, os.path.dirname(DEBUG_LOG_FILE)]:
