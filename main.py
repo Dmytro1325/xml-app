@@ -9,8 +9,8 @@ import xml.etree.ElementTree as ET
 import json
 import time
 import requests
-import hashlib
 import asyncio
+import re
 from datetime import datetime
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -23,27 +23,27 @@ XML_DIR = "/output"
 LOG_DIR = "/app/logs"
 DEBUG_LOG_FILE = os.path.join(LOG_DIR, "debug_logs", "debug_log.html")
 UPDATE_INTERVAL = 1800  # 30 хвилин
-price_hash_cache = {}
 
 # 🔹 Створення директорій
 for dir_path in [XML_DIR, os.path.dirname(DEBUG_LOG_FILE)]:
     os.makedirs(dir_path, exist_ok=True)
 
-# 🔹 Функція запису логів (в один файл)
+# 🔹 Функція логування
 def log_to_file(content):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"[{timestamp}] {content}\n"
-    
+
     with open(DEBUG_LOG_FILE, "a", encoding="utf-8") as f:
         f.write(log_entry)
-    
-    print(log_entry.strip())  # Дублюємо в консоль
+
+    print(log_entry.strip())  # Виводимо в консоль
 
 # 🔹 Авторизація Google Sheets
 GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")
 TOKEN_JSON = os.getenv("TOKEN_JSON")
 if not GOOGLE_CREDENTIALS or not TOKEN_JSON:
     raise ValueError("❌ GOOGLE_CREDENTIALS або TOKEN_JSON відсутні!")
+
 TOKEN_FILE = json.loads(TOKEN_JSON)
 CREDENTIALS_FILE = json.loads(GOOGLE_CREDENTIALS)
 
@@ -55,18 +55,47 @@ def get_google_client():
             log_to_file("🔄 Токен оновлено")
         else:
             flow = InstalledAppFlow.from_client_config(
-                CREDENTIALS_FILE, ["https://www.googleapis.com/auth/spreadsheets"])
+                CREDENTIALS_FILE, ["https://www.googleapis.com/auth/spreadsheets"]
+            )
             creds = flow.run_local_server(port=8080)
     return gspread.authorize(creds)
 
 client = get_google_client()
 spreadsheet = client.open_by_key(MASTER_SHEET_ID)
 
+# 🔹 Функція безпечного отримання значень
+def safe_get_value(row, column_letter, default_value="-"):
+    try:
+        if column_letter and column_letter.isalpha():
+            col_index = ord(column_letter.upper()) - 65  # A -> 0, B -> 1, C -> 2
+            if len(row) > col_index:
+                value = str(row[col_index]).strip()
+                return value if value else default_value
+    except Exception as e:
+        log_to_file(f"⚠️ Помилка при отриманні значення ({column_letter}): {e}")
+
+    return default_value
+
+# 🔹 Функція для очищення ціни
+def clean_price(value):
+    try:
+        if not value:
+            return "0"
+        value = re.sub(r"[^\d,\.]", "", value)
+        if "," in value:
+            value = value.split(",")[0]
+        elif "." in value:
+            value = value.split(".")[0]
+        return value if value else "0"
+    except Exception as e:
+        log_to_file(f"⚠️ Помилка обробки ціни: {value} - {e}")
+        return "0"
+
 # 🔹 Функція генерації XML
-def create_xml(supplier_id, supplier_name, sheet_id):
+def create_xml(supplier_id, supplier_name, sheet_id, columns):
     xml_file = os.path.join(XML_DIR, f"{supplier_id}.xml")
     log_to_file(f"📥 Обробка: {supplier_name} ({sheet_id})")
-    
+
     retry_count = 0
     max_retries = 5  # Спроба до 5 разів при помилці 429
 
@@ -75,64 +104,42 @@ def create_xml(supplier_id, supplier_name, sheet_id):
             spreadsheet = client.open_by_key(sheet_id)
             sheets = spreadsheet.worksheets()
             combined_data = []
-            
+
             for sheet in sheets:
-                try:
-                    data = sheet.get_all_values()
-                    if len(data) < 2:
-                        log_to_file(f"⚠️ Аркуш {sheet.title} порожній")
-                        continue
-                    combined_data.extend(data[1:])
-                except gspread.exceptions.APIError as e:
-                    log_to_file(f"❌ Помилка доступу до аркуша {sheet.title}: {e}")
+                data = sheet.get_all_values()
+                if len(data) < 2:
+                    log_to_file(f"⚠️ Аркуш {sheet.title} порожній")
                     continue
-            
+                combined_data.extend(data[1:])
+
             if not combined_data:
                 log_to_file(f"⚠️ {supplier_name} немає даних")
                 return
-            
+
             root = ET.Element("products")
             for row in combined_data:
                 product = ET.SubElement(root, "product")
-                ET.SubElement(product, "id").text = row[0] if len(row) > 0 else "-"
-                ET.SubElement(product, "name").text = row[1] if len(row) > 1 else "-"
-                ET.SubElement(product, "price").text = row[3] if len(row) > 3 else "0"
-            
+                ET.SubElement(product, "id").text = safe_get_value(row, columns["ID"], "-")
+                ET.SubElement(product, "name").text = safe_get_value(row, columns["Name"], "-")
+                ET.SubElement(product, "price").text = clean_price(safe_get_value(row, columns["Price"], "0"))
+
             ET.ElementTree(root).write(xml_file, encoding="utf-8", xml_declaration=True)
             log_to_file(f"✅ XML {xml_file} збережено ({len(combined_data)} товарів)")
-            
-            # Робимо паузу між запитами (уникаємо перевищення ліміту)
             time.sleep(random.uniform(1.5, 2.5))
-            return  # Вихід з функції після успіху
+            return
 
         except gspread.exceptions.APIError as e:
-            if "429" in str(e):  # Якщо це помилка перевищення ліміту
+            if "429" in str(e):
                 retry_count += 1
-                wait_time = retry_count * 20  # Чекаємо 20, 40, 60 секунд...
+                wait_time = retry_count * 20
                 log_to_file(f"⚠️ Ліміт перевищено. Повторна спроба {retry_count}/{max_retries} через {wait_time} сек.")
-                time.sleep(wait_time)  # Чекаємо перед повторною спробою
+                time.sleep(wait_time)
             else:
                 log_to_file(f"❌ Помилка доступу до {supplier_name}: {e}")
-                return  # Виходимо, якщо це не помилка 429
+                return
 
-    log_to_file(f"❌ Всі {max_retries} спроби обробити {supplier_name} провалилися. Пропускаємо.")
+    log_to_file(f"❌ Всі {max_retries} спроби обробити {supplier_name} провалилися.")
 
-# 🔹 Автоматичне оновлення XML
-async def periodic_update():
-    while True:
-        log_to_file("🔄 [Auto-Update] Початок перевірки змін у Google Sheets...")
-        try:
-            supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
-        except gspread.exceptions.APIError as e:
-            log_to_file(f"❌ Помилка доступу до головної таблиці: {e}")
-            await asyncio.sleep(UPDATE_INTERVAL)
-            continue
-
-        for supplier in supplier_data:
-            create_xml(str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"])
-
-        log_to_file("✅ [Auto-Update] Перевірку завершено, очікуємо наступний цикл...")
-        await asyncio.sleep(UPDATE_INTERVAL)
 
 # 🔹 API
 app = FastAPI()
@@ -181,7 +188,6 @@ def delete_all_files():
 
 @app.get("/logs/debug", response_class=HTMLResponse)
 def view_debug_log():
-    """ Відображаємо останній дебаг-лог у браузері """
     if os.path.exists(DEBUG_LOG_FILE):
         return FileResponse(DEBUG_LOG_FILE)
     raise HTTPException(status_code=404, detail="Файл логів не знайдено.")
@@ -190,10 +196,11 @@ def view_debug_log():
 async def startup_event():
     asyncio.create_task(periodic_update())
 
-@app.post("/XML_prices/google_sheet_to_xml/generate")
+@app.get("/XML_prices/google_sheet_to_xml/generate")
 def generate():
     threading.Thread(target=lambda: [
-        create_xml(str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"])
+        create_xml(str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"], 
+                   {"ID": "A", "Name": "B", "Price": "D"})
         for supplier in spreadsheet.worksheet("Sheet1").get_all_records()
     ]).start()
     return {"status": "Генерація XML запущена"}
