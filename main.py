@@ -355,7 +355,7 @@ def list_logs(request: Request):
     try:
         log_files = [
             {"name": f, "size": os.path.getsize(os.path.join(LOG_DIR, f))}
-            for f in os.listdir(LOG_DIR) if f.endswith(".log") or f.endswith(".txt")
+            for f in os.listdir(LOG_DIR) if f.endswith(".log") or f.endswith(".txt") or f.endswith(".html")
         ]
     except FileNotFoundError:
         log_files = []
