@@ -108,10 +108,8 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
-
-app.mount("/output/", StaticFiles(directory=os.path.abspath(XML_DIR)), name="output")    
+  
 templates = Jinja2Templates(directory="/app/templates")
-
 
 @app.get("/output/", response_class=HTMLResponse)
 def list_output_files(request: Request):
@@ -125,6 +123,7 @@ def list_output_files(request: Request):
         files = []
     return templates.TemplateResponse("file_list.html", {"request": request, "files": files})
 
+app.mount("/output/", StaticFiles(directory=os.path.abspath(XML_DIR)), name="output")  
 
 @app.on_event("startup")
 async def startup_event():
