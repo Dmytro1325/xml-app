@@ -110,9 +110,9 @@ app = FastAPI(
 )
 
 
-templates = Jinja2Templates(directory="/app/templates")
-app.mount("/output", StaticFiles(directory=XML_DIR), name="output")        
 
+app.mount("/output", StaticFiles(directory=XML_DIR), name="output")        
+templates = Jinja2Templates(directory="/app/templates")
 
 
 
