@@ -106,8 +106,6 @@ templates = Jinja2Templates(directory="/app/templates")
 app.mount("/output", StaticFiles(directory=XML_DIR, html=True), name="output")        
 
 
-# Ініціалізація шаблонів
-templates = Jinja2Templates(directory="/app/templates")
 
 @app.get("/output/", response_class=HTMLResponse)
 def list_output_files(request: Request):
@@ -119,7 +117,6 @@ def list_output_files(request: Request):
         files = sorted(files)  # Сортуємо за алфавітом
     except FileNotFoundError:
         files = []
-
     return templates.TemplateResponse("file_list.html", {"request": request, "files": files})
 
 
