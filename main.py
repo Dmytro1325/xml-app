@@ -252,3 +252,105 @@ def delete_all_files():
         os.remove(file_path)
 
     return {"status": "success", "message": "Всі файли у папці output видалено."}
+# API
+app = FastAPI(
+    title="Google Sheets to XML API",
+    description="Автоматична генерація XML-файлів з Google Sheets",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+  
+templates = Jinja2Templates(directory="/app/templates")
+
+@app.get("/output/", response_class=HTMLResponse)
+def list_output_files(request: Request):
+    """
+    Генерує HTML-сторінку зі списком файлів у папці /output/
+    """
+    try:
+        files = os.listdir(XML_DIR)
+        files = sorted(files)  # Сортуємо за алфавітом
+    except FileNotFoundError:
+        files = []
+    return templates.TemplateResponse("file_list.html", {"request": request, "files": files})
+
+app.mount("/output/", StaticFiles(directory=os.path.abspath(XML_DIR)), name="output")  
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(periodic_update())
+
+
+
+
+@app.get("/logs/", response_class=HTMLResponse)
+def list_logs(request: Request):
+    logs = []
+    for log_dir in [SUCCESS_LOG_DIR, ERROR_LOG_DIR, DEBUG_LOG_DIR]:
+        for filename in os.listdir(log_dir):
+            logs.append({"name": filename, "size": os.path.getsize(os.path.join(log_dir, filename))})
+    return templates.TemplateResponse("logs.html", {"request": request, "logs": logs})
+
+@app.get("/logs/view/{filename}")
+def view_log(filename: str):
+    for log_dir in [SUCCESS_LOG_DIR, ERROR_LOG_DIR, DEBUG_LOG_DIR]:
+        file_path = os.path.join(log_dir, filename)
+        if os.path.exists(file_path):
+            return FileResponse(file_path)
+    raise HTTPException(status_code=404, detail="Файл не знайдено")
+
+@app.post("/XML_prices/google_sheet_to_xml/generate")
+def generate():
+    thread = threading.Thread(target=lambda: [create_xml(str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"]) for supplier in spreadsheet.worksheet("Sheet1").get_all_records()])
+    thread.start()
+    return {"status": "Генерація XML запущена"}
+
+
+
+@app.get("/XML_prices/google_sheet_to_xml/status")
+def status():
+    return {"running": process_status["running"], "message": "FastAPI is working!"}
+
+
+
+@app.get("/XML_prices/google_sheet_to_xml/files")
+def list_files():
+    files = [f for f in os.listdir(XML_DIR) if f.endswith(".xml")]
+    return {"files": files}
+
+
+@app.get("/XML_prices/google_sheet_to_xml/download/{filename}")
+def download_file(filename: str):
+    file_path = os.path.join(XML_DIR, filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path, filename=filename)
+    raise HTTPException(status_code=404, detail="Файл не знайдено")
+
+@app.delete("/XML_prices/google_sheet_to_xml/delete/{filename}")
+def delete_file(filename: str):
+    """
+    Видаляє конкретний файл у папці /output/
+    """
+    file_path = os.path.join(XML_DIR, filename)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        return {"status": "success", "message": f"Файл {filename} видалено."}
+    else:
+        raise HTTPException(status_code=404, detail=f"Файл {filename} не знайдено.")
+
+
+@app.delete("/XML_prices/google_sheet_to_xml/delete_all")
+def delete_all_files():
+    """
+    Видаляє всі файли у папці /output/
+    """
+    files = os.listdir(XML_DIR)
+    if not files:
+        return {"status": "success", "message": "Папка вже порожня."}
+
+    for file in files:
+        file_path = os.path.join(XML_DIR, file)
+        os.remove(file_path)
+
+    return {"status": "success", "message": "Всі файли у папці output видалено."}
