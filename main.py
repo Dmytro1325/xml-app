@@ -192,9 +192,6 @@ def view_debug_log():
         return FileResponse(DEBUG_LOG_FILE)
     raise HTTPException(status_code=404, detail="Файл логів не знайдено.")
 
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(periodic_update())
 
 @app.get("/XML_prices/google_sheet_to_xml/generate")
 def generate():
@@ -204,3 +201,7 @@ def generate():
         for supplier in spreadsheet.worksheet("Sheet1").get_all_records()
     ]).start()
     return {"status": "Генерація XML запущена"}
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(generate())
