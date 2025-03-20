@@ -140,6 +140,23 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns):
 
     log_to_file(f"❌ Всі {max_retries} спроби обробити {supplier_name} провалилися.")
 
+# 🔹 Автоматичне оновлення XML
+async def periodic_update():
+    while True:
+        log_to_file("🔄 [Auto-Update] Початок перевірки змін у Google Sheets...")
+        try:
+            supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
+        except gspread.exceptions.APIError as e:
+            log_to_file(f"❌ Помилка доступу до головної таблиці: {e}")
+            await asyncio.sleep(UPDATE_INTERVAL)
+            continue
+
+        for supplier in supplier_data:
+            create_xml(str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"],
+                       {"ID": "A", "Name": "B", "Price": "D"})
+
+        log_to_file("✅ [Auto-Update] Перевірку завершено, очікуємо наступний цикл...")
+        await asyncio.sleep(UPDATE_INTERVAL)
 
 # 🔹 API
 app = FastAPI()
@@ -204,4 +221,4 @@ def generate():
 
 @app.on_event("startup")
 async def startup_event():
-    asyncio.create_task(generate())
+     asyncio.create_task(periodic_update())  # Викликаємо періодичне оновлення
