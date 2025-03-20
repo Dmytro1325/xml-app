@@ -101,10 +101,24 @@ async def periodic_update():
         await asyncio.sleep(UPDATE_INTERVAL)
 
 # API
-app = FastAPI()
-templates = Jinja2Templates(directory="/app/templates")
-app.mount("/output", StaticFiles(directory=XML_DIR, html=True), name="output")        
+app = FastAPI(
+    title="Google Sheets to XML API",
+    description="Автоматична генерація XML-файлів з Google Sheets",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 
+
+templates = Jinja2Templates(directory="/app/templates")
+app.mount("/output", StaticFiles(directory=XML_DIR), name="output")        
+
+
+
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(periodic_update())
 
 
 @app.get("/output/", response_class=HTMLResponse)
@@ -120,9 +134,7 @@ def list_output_files(request: Request):
     return templates.TemplateResponse("file_list.html", {"request": request, "files": files})
 
 
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(periodic_update())
+
 
 
 

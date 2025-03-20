@@ -13,6 +13,14 @@ RUN mkdir -p /app/output
 # Переконуємось, що папка `templates/` існує
 RUN mkdir -p /app/templates
 
+# Переконуємось, що папка `SUCCESS_LOG_DIR` існує
+RUN mkdir -p /app/SUCCESS_LOG_DIR
+
+
+# Переконуємось, що папка `ERROR_LOG_DIR` існує
+RUN mkdir -p /app/ERROR_LOG_DIR
+
+
 # Встановлюємо залежності
 RUN pip install --no-cache-dir -r requirements.txt
 
