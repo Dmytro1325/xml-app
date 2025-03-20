@@ -15,6 +15,7 @@ from datetime import datetime
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request as GoogleRequest
+import random
 
 # 🔹 Конфігурація
 MASTER_SHEET_ID = "1z16Xcj_58R2Z-JGOMuyx4GpVdQqDn1UtQirCxOrE_hc"
@@ -66,38 +67,55 @@ def create_xml(supplier_id, supplier_name, sheet_id):
     xml_file = os.path.join(XML_DIR, f"{supplier_id}.xml")
     log_to_file(f"📥 Обробка: {supplier_name} ({sheet_id})")
     
-    try:
-        spreadsheet = client.open_by_key(sheet_id)
-        sheets = spreadsheet.worksheets()
-        combined_data = []
-        
-        for sheet in sheets:
-            try:
-                data = sheet.get_all_values()
-                if len(data) < 2:
-                    log_to_file(f"⚠️ Аркуш {sheet.title} порожній")
+    retry_count = 0
+    max_retries = 5  # Спроба до 5 разів при помилці 429
+
+    while retry_count < max_retries:
+        try:
+            spreadsheet = client.open_by_key(sheet_id)
+            sheets = spreadsheet.worksheets()
+            combined_data = []
+            
+            for sheet in sheets:
+                try:
+                    data = sheet.get_all_values()
+                    if len(data) < 2:
+                        log_to_file(f"⚠️ Аркуш {sheet.title} порожній")
+                        continue
+                    combined_data.extend(data[1:])
+                except gspread.exceptions.APIError as e:
+                    log_to_file(f"❌ Помилка доступу до аркуша {sheet.title}: {e}")
                     continue
-                combined_data.extend(data[1:])
-            except gspread.exceptions.APIError as e:
-                log_to_file(f"❌ Помилка доступу до аркуша {sheet.title}: {e}")
-                continue
-        
-        if not combined_data:
-            log_to_file(f"⚠️ {supplier_name} немає даних")
-            return
-        
-        root = ET.Element("products")
-        for row in combined_data:
-            product = ET.SubElement(root, "product")
-            ET.SubElement(product, "id").text = row[0] if len(row) > 0 else "-"
-            ET.SubElement(product, "name").text = row[1] if len(row) > 1 else "-"
-            ET.SubElement(product, "price").text = row[3] if len(row) > 3 else "0"
-        
-        ET.ElementTree(root).write(xml_file, encoding="utf-8", xml_declaration=True)
-        log_to_file(f"✅ XML {xml_file} збережено ({len(combined_data)} товарів)")
-    
-    except gspread.exceptions.APIError as e:
-        log_to_file(f"❌ Помилка доступу до {supplier_name}: {e}")
+            
+            if not combined_data:
+                log_to_file(f"⚠️ {supplier_name} немає даних")
+                return
+            
+            root = ET.Element("products")
+            for row in combined_data:
+                product = ET.SubElement(root, "product")
+                ET.SubElement(product, "id").text = row[0] if len(row) > 0 else "-"
+                ET.SubElement(product, "name").text = row[1] if len(row) > 1 else "-"
+                ET.SubElement(product, "price").text = row[3] if len(row) > 3 else "0"
+            
+            ET.ElementTree(root).write(xml_file, encoding="utf-8", xml_declaration=True)
+            log_to_file(f"✅ XML {xml_file} збережено ({len(combined_data)} товарів)")
+            
+            # Робимо паузу між запитами (уникаємо перевищення ліміту)
+            time.sleep(random.uniform(1.5, 2.5))
+            return  # Вихід з функції після успіху
+
+        except gspread.exceptions.APIError as e:
+            if "429" in str(e):  # Якщо це помилка перевищення ліміту
+                retry_count += 1
+                wait_time = retry_count * 20  # Чекаємо 20, 40, 60 секунд...
+                log_to_file(f"⚠️ Ліміт перевищено. Повторна спроба {retry_count}/{max_retries} через {wait_time} сек.")
+                time.sleep(wait_time)  # Чекаємо перед повторною спробою
+            else:
+                log_to_file(f"❌ Помилка доступу до {supplier_name}: {e}")
+                return  # Виходимо, якщо це не помилка 429
+
+    log_to_file(f"❌ Всі {max_retries} спроби обробити {supplier_name} провалилися. Пропускаємо.")
 
 # 🔹 Автоматичне оновлення XML
 async def periodic_update():
