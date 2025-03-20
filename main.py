@@ -217,7 +217,7 @@ def view_debug_log():
 
 @app.on_event("startup")
 async def startup_event():
-    asyncio.ensure_future(periodic_update())
+    asyncio.create_task(periodic_update())
 
 
 
