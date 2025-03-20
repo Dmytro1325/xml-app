@@ -31,7 +31,7 @@ jobs:
       - name: 📥 Клонування репозиторію (main)
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: helm
           fetch-depth: 0
 
       - name: 🔍 Визначення версії
@@ -52,4 +52,4 @@ jobs:
           git config user.email "github-actions@github.com"
           git add xml-app/Chart.yaml xml-app/values.yaml
           git commit -m "🔄 Оновлення Helm-чарту: версія $NEW_VERSION, образ $VERSION"
-          git push origin main
+          git push origin helm
