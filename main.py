@@ -16,6 +16,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request as GoogleRequest
 import random
+import hashlib
 
 # 🔹 Конфігурація
 MASTER_SHEET_ID = "1z16Xcj_58R2Z-JGOMuyx4GpVdQqDn1UtQirCxOrE_hc"
@@ -139,6 +140,19 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns):
                 return
 
     log_to_file(f"❌ Всі {max_retries} спроби обробити {supplier_name} провалилися.")
+
+def get_price_hash(sheet):
+    """
+    Обчислює хеш-код для даних у першому аркуші Google Sheets.
+    Використовується для визначення, чи змінився вміст таблиці.
+    """
+    try:
+        data = sheet.get_all_values()
+        data_str = "\n".join([",".join(row) for row in data])  # Перетворюємо у рядок
+        return hashlib.md5(data_str.encode()).hexdigest()  # Генеруємо хеш MD5
+    except Exception as e:
+        log_to_file(f"⚠️ Помилка при обчисленні хешу: {e}")
+        return None  # У разі помилки повертаємо None
 
 async def periodic_update():
     """
