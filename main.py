@@ -20,33 +20,23 @@ from google.auth.transport.requests import Request as GoogleRequest
 MASTER_SHEET_ID = "1z16Xcj_58R2Z-JGOMuyx4GpVdQqDn1UtQirCxOrE_hc"
 XML_DIR = "/output"
 LOG_DIR = "/app/logs"
-SUCCESS_LOG_DIR = os.path.join(LOG_DIR, "success_logs")
-ERROR_LOG_DIR = os.path.join(LOG_DIR, "error_logs")
-DEBUG_LOG_DIR = os.path.join(LOG_DIR, "debug_logs")  # Дебаг-лог
+DEBUG_LOG_FILE = os.path.join(LOG_DIR, "debug_logs", "debug_log.html")
 UPDATE_INTERVAL = 1800  # 30 хвилин
 price_hash_cache = {}
 
 # 🔹 Створення директорій
-for dir_path in [XML_DIR, SUCCESS_LOG_DIR, ERROR_LOG_DIR, DEBUG_LOG_DIR]:
+for dir_path in [XML_DIR, os.path.dirname(DEBUG_LOG_FILE)]:
     os.makedirs(dir_path, exist_ok=True)
 
-# 🔹 Функція запису логів (успішні, помилки, дебаг)
-def log_to_file(log_type, content):
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    if log_type == "success":
-        log_dir = SUCCESS_LOG_DIR
-        log_file = os.path.join(log_dir, f"{timestamp}.html")
-    elif log_type == "error":
-        log_dir = ERROR_LOG_DIR
-        log_file = os.path.join(log_dir, f"{timestamp}_error.html")
-    else:  # Debug
-        log_dir = DEBUG_LOG_DIR
-        log_file = os.path.join(log_dir, f"{timestamp}_debug.html")
-
-    with open(log_file, "w", encoding="utf-8") as f:
-        f.write("<html><body><pre>\n" + content + "\n</pre></body></html>")
-
-    return log_file
+# 🔹 Функція запису логів (в один файл)
+def log_to_file(content):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"[{timestamp}] {content}\n"
+    
+    with open(DEBUG_LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(log_entry)
+    
+    print(log_entry.strip())  # Дублюємо в консоль
 
 # 🔹 Авторизація Google Sheets
 GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")
@@ -61,7 +51,7 @@ def get_google_client():
     if not creds or not creds.valid:
         if creds.expired and creds.refresh_token:
             creds.refresh(GoogleRequest(requests.Session()))
-            log_to_file("debug", "🔄 Токен оновлено")
+            log_to_file("🔄 Токен оновлено")
         else:
             flow = InstalledAppFlow.from_client_config(
                 CREDENTIALS_FILE, ["https://www.googleapis.com/auth/spreadsheets"])
@@ -74,7 +64,7 @@ spreadsheet = client.open_by_key(MASTER_SHEET_ID)
 # 🔹 Функція генерації XML
 def create_xml(supplier_id, supplier_name, sheet_id):
     xml_file = os.path.join(XML_DIR, f"{supplier_id}.xml")
-    log_content = f"📥 Обробка: {supplier_name} ({sheet_id})\n"
+    log_to_file(f"📥 Обробка: {supplier_name} ({sheet_id})")
     
     try:
         spreadsheet = client.open_by_key(sheet_id)
@@ -85,17 +75,15 @@ def create_xml(supplier_id, supplier_name, sheet_id):
             try:
                 data = sheet.get_all_values()
                 if len(data) < 2:
-                    log_content += f"⚠️ Аркуш {sheet.title} порожній\n"
+                    log_to_file(f"⚠️ Аркуш {sheet.title} порожній")
                     continue
                 combined_data.extend(data[1:])
             except gspread.exceptions.APIError as e:
-                log_content += f"❌ Помилка доступу до аркуша {sheet.title}: {e}\n"
+                log_to_file(f"❌ Помилка доступу до аркуша {sheet.title}: {e}")
                 continue
         
         if not combined_data:
-            log_content += f"⚠️ {supplier_name} немає даних\n"
-            log_to_file("error", log_content)
-            log_to_file("debug", log_content)  # Лог у дебаг
+            log_to_file(f"⚠️ {supplier_name} немає даних")
             return
         
         root = ET.Element("products")
@@ -106,40 +94,30 @@ def create_xml(supplier_id, supplier_name, sheet_id):
             ET.SubElement(product, "price").text = row[3] if len(row) > 3 else "0"
         
         ET.ElementTree(root).write(xml_file, encoding="utf-8", xml_declaration=True)
-        log_content += f"✅ XML {xml_file} збережено ({len(combined_data)} товарів)\n"
-        log_to_file("success", log_content)
-        log_to_file("debug", log_content)  # Дублюємо в дебаг
+        log_to_file(f"✅ XML {xml_file} збережено ({len(combined_data)} товарів)")
     
     except gspread.exceptions.APIError as e:
-        log_content += f"❌ Помилка доступу до {supplier_name}: {e}\n"
-        log_to_file("error", log_content)
-        log_to_file("debug", log_content)
+        log_to_file(f"❌ Помилка доступу до {supplier_name}: {e}")
 
 # 🔹 Автоматичне оновлення XML
 async def periodic_update():
     while True:
-        log_to_file("debug", "🔄 [Auto-Update] Початок перевірки змін у Google Sheets...")
+        log_to_file("🔄 [Auto-Update] Початок перевірки змін у Google Sheets...")
         try:
             supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
         except gspread.exceptions.APIError as e:
-            log_to_file("debug", f"❌ Помилка доступу до головної таблиці: {e}")
+            log_to_file(f"❌ Помилка доступу до головної таблиці: {e}")
             await asyncio.sleep(UPDATE_INTERVAL)
             continue
 
         for supplier in supplier_data:
             create_xml(str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"])
 
-        log_to_file("debug", "✅ [Auto-Update] Перевірку завершено, очікуємо наступний цикл...")
+        log_to_file("✅ [Auto-Update] Перевірку завершено, очікуємо наступний цикл...")
         await asyncio.sleep(UPDATE_INTERVAL)
-# API
-app = FastAPI(
-    title="Google Sheets to XML API",
-    description="Автоматична генерація XML-файлів з Google Sheets",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
-)
-  
+
+# 🔹 API
+app = FastAPI()
 templates = Jinja2Templates(directory="/app/templates")
 
 @app.get("/output/", response_class=HTMLResponse)
@@ -155,49 +133,11 @@ def list_output_files(request: Request):
     return templates.TemplateResponse("file_list.html", {"request": request, "files": files})
 
 app.mount("/output/", StaticFiles(directory=os.path.abspath(XML_DIR)), name="output")  
-
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(periodic_update())
-
-
-
-
-@app.get("/logs/", response_class=HTMLResponse)
-def list_logs(request: Request):
-    logs = []
-    for log_dir in [SUCCESS_LOG_DIR, ERROR_LOG_DIR, DEBUG_LOG_DIR]:
-        for filename in os.listdir(log_dir):
-            logs.append({"name": filename, "size": os.path.getsize(os.path.join(log_dir, filename))})
-    return templates.TemplateResponse("logs.html", {"request": request, "logs": logs})
-
-@app.get("/logs/view/{filename}")
-def view_log(filename: str):
-    for log_dir in [SUCCESS_LOG_DIR, ERROR_LOG_DIR, DEBUG_LOG_DIR]:
-        file_path = os.path.join(log_dir, filename)
-        if os.path.exists(file_path):
-            return FileResponse(file_path)
-    raise HTTPException(status_code=404, detail="Файл не знайдено")
-
-@app.post("/XML_prices/google_sheet_to_xml/generate")
-def generate():
-    thread = threading.Thread(target=lambda: [create_xml(str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"]) for supplier in spreadsheet.worksheet("Sheet1").get_all_records()])
-    thread.start()
-    return {"status": "Генерація XML запущена"}
-
-
-
-@app.get("/XML_prices/google_sheet_to_xml/status")
-def status():
-    return {"running": process_status["running"], "message": "FastAPI is working!"}
-
-
+ 
 
 @app.get("/XML_prices/google_sheet_to_xml/files")
 def list_files():
-    files = [f for f in os.listdir(XML_DIR) if f.endswith(".xml")]
-    return {"files": files}
-
+    return {"files": [f for f in os.listdir(XML_DIR) if f.endswith(".xml")]}
 
 @app.get("/XML_prices/google_sheet_to_xml/download/{filename}")
 def download_file(filename: str):
@@ -208,28 +148,34 @@ def download_file(filename: str):
 
 @app.delete("/XML_prices/google_sheet_to_xml/delete/{filename}")
 def delete_file(filename: str):
-    """
-    Видаляє конкретний файл у папці /output/
-    """
     file_path = os.path.join(XML_DIR, filename)
     if os.path.exists(file_path):
         os.remove(file_path)
         return {"status": "success", "message": f"Файл {filename} видалено."}
-    else:
-        raise HTTPException(status_code=404, detail=f"Файл {filename} не знайдено.")
-
+    raise HTTPException(status_code=404, detail=f"Файл {filename} не знайдено.")
 
 @app.delete("/XML_prices/google_sheet_to_xml/delete_all")
 def delete_all_files():
-    """
-    Видаляє всі файли у папці /output/
-    """
     files = os.listdir(XML_DIR)
-    if not files:
-        return {"status": "success", "message": "Папка вже порожня."}
-
     for file in files:
-        file_path = os.path.join(XML_DIR, file)
-        os.remove(file_path)
-
+        os.remove(os.path.join(XML_DIR, file))
     return {"status": "success", "message": "Всі файли у папці output видалено."}
+
+@app.get("/logs/debug", response_class=HTMLResponse)
+def view_debug_log():
+    """ Відображаємо останній дебаг-лог у браузері """
+    if os.path.exists(DEBUG_LOG_FILE):
+        return FileResponse(DEBUG_LOG_FILE)
+    raise HTTPException(status_code=404, detail="Файл логів не знайдено.")
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(periodic_update())
+
+@app.post("/XML_prices/google_sheet_to_xml/generate")
+def generate():
+    threading.Thread(target=lambda: [
+        create_xml(str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"])
+        for supplier in spreadsheet.worksheet("Sheet1").get_all_records()
+    ]).start()
+    return {"status": "Генерація XML запущена"}
