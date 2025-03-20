@@ -109,7 +109,7 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-app.mount("/output", StaticFiles(directory=os.path.abspath(XML_DIR)), name="output")    
+app.mount("/output/", StaticFiles(directory=os.path.abspath(XML_DIR)), name="output")    
 templates = Jinja2Templates(directory="/app/templates")
 
 
