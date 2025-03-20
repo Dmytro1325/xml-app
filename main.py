@@ -38,7 +38,7 @@ def log_to_file(content):
     with open(DEBUG_LOG_FILE, "a", encoding="utf-8") as f:
         f.write(log_entry)
 
-    print(log_entry.strip())  # Виводимо в консоль
+    #print(log_entry.strip())  # Виводимо в консоль
 
 # 🔹 Авторизація Google Sheets
 GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")

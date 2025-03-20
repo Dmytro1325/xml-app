@@ -2,25 +2,84 @@
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Логи</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 800px;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        h2 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #007BFF;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+        .open-link {
+            display: inline-block;
+            padding: 6px 12px;
+            background-color: #007BFF;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: background 0.3s ease;
+        }
+        .open-link:hover {
+            background-color: #0056b3;
+        }
+    </style>
 </head>
 <body>
-    <h2>Список логів</h2>
-    <table border="1">
-        <tr>
-            <th>Ім'я файлу</th>
-            <th>Розмір, байт</th>
-            <th>Тип</th>
-            <th>Перегляд</th>
-        </tr>
-        {% for log in logs %}
-        <tr>
-            <td>{{ log.name }}</td>
-            <td>{{ log.size }}</td>
-            <td>{{ log.type }}</td>
-            <td><a href="/logs/view/{{ log.name }}">Відкрити</a></td>
-        </tr>
-        {% endfor %}
-    </table>
+    <div class="container">
+        <h2>📜 Список логів</h2>
+        <table>
+            <tr>
+                <th>Ім'я файлу</th>
+                <th>Розмір (байт)</th>
+                <th>Тип</th>
+                <th>Перегляд</th>
+            </tr>
+            {% for log in logs %}
+            <tr>
+                <td>{{ log.name }}</td>
+                <td>{{ log.size }}</td>
+                <td>{{ log.type }}</td>
+                <td><a class="open-link" href="/logs/view/{{ log.name }}">🔍 Відкрити</a></td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
 </body>
 </html>
