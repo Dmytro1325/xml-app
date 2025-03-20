@@ -123,8 +123,6 @@ def list_output_files(request: Request):
     return templates.TemplateResponse("file_list.html", {"request": request, "files": files})
 
 
-app.mount("/output", StaticFiles(directory=XML_DIR, html=True), name="output")
-
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(periodic_update())
