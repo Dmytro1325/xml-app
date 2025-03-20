@@ -14,7 +14,10 @@ jobs:
           fetch-depth: 0
 
       - name: 🔍 Отримання версії з тега
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+        id: set_version
+        run: |
+          VERSION=$(git describe --tags --abbrev=0)-$(git rev-parse --short HEAD)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: 🔑 Логін у Docker Hub
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
