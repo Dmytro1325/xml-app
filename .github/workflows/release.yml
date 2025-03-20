@@ -38,7 +38,10 @@ jobs:
           fetch-depth: 0
 
       - name: 🔍 Визначення версії
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+        id: set_version
+        run: |
+          VERSION=$(git describe --tags --abbrev=0)-$(git rev-parse --short HEAD)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: 🔼 Оновлення версії Helm-чарту (+1)
         run: |
