@@ -159,13 +159,19 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns):
 
 # Автоматичне оновлення XML
 async def periodic_update():
+    """
+    Фоновий процес, який оновлює тільки ті XML-файли, які змінилися,
+    з урахуванням кешу та обмеження на запити.
+    """
     while True:
         print("🔄 [Auto-Update] Починаємо перевірку змін у Google Sheets...")
 
         supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
         updated_suppliers = []
+        skipped_suppliers = []
 
         batch_size = 5  # Обробляємо по 5 постачальників за один цикл
+
         for i in range(0, len(supplier_data), batch_size):
             batch = supplier_data[i:i + batch_size]
 
@@ -174,9 +180,14 @@ async def periodic_update():
                 supplier_name = supplier["Supplier Name"]
                 sheet_id = supplier["Google Sheet ID"]
 
+                if supplier_id in skipped_suppliers:
+                    print(f"⚠️ {supplier_name}: Пропускаємо, бо в попередньому циклі було перевищено ліміт API.")
+                    continue
+
                 try:
                     sheet = client.open_by_key(sheet_id).sheet1
-                    time.sleep(2)  # Запобігаємо перевантаженню API
+                    time.sleep(5)  # Збільшуємо паузу між запитами
+
                     new_hash = get_price_hash(sheet)
 
                     if supplier_id in price_hash_cache and price_hash_cache[supplier_id] == new_hash:
@@ -189,9 +200,9 @@ async def periodic_update():
 
                 except gspread.exceptions.APIError as e:
                     if "429" in str(e):
-                        print(f"⚠️ Ліміт запитів вичерпано для {supplier_name}. Чекаємо 30 сек...")
-                        time.sleep(30)  # Чекаємо, щоб уникнути блокування API
-                        continue
+                        print(f"⚠️ Ліміт запитів вичерпано для {supplier_name}. Чекаємо 60 сек...")
+                        time.sleep(60)  # Чекаємо довше перед повторною спробою
+                        skipped_suppliers.append(supplier_id)  # Пропускаємо його до наступного циклу
                     else:
                         print(f"❌ Помилка обробки {supplier_name}: {e}")
 
@@ -201,15 +212,63 @@ async def periodic_update():
         print("✅ [Auto-Update] Перевірку завершено, чекаємо на наступний цикл...")
         await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо 30 хвилин до наступного оновлення
 
+
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(periodic_update())
 
 @app.post("/XML_prices/google_sheet_to_xml/generate")
+@app.post("/XML_prices/google_sheet_to_xml/generate")
 def generate():
-    thread = threading.Thread(target=lambda: [create_xml(s["Post_ID"], s["Supplier Name"], s["Google Sheet ID"], s) for s in spreadsheet.worksheet("Sheet1").get_all_records()])
+    """
+    Ручний запуск генерації XML-файлів. Оптимізовано для уникнення ліміту Google API.
+    """
+    def process_generation():
+        global process_status
+        print("🔄 [Manual Update] Запущено ручне оновлення XML...")
+
+        supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
+        updated_suppliers = []
+
+        for supplier in supplier_data:
+            supplier_id = str(supplier["Post_ID"])
+            supplier_name = supplier["Supplier Name"]
+            sheet_id = supplier["Google Sheet ID"]
+
+            try:
+                sheet = client.open_by_key(sheet_id).sheet1
+                time.sleep(5)  # Запобігаємо перевищенню ліміту запитів
+
+                new_hash = get_price_hash(sheet)
+
+                if supplier_id in price_hash_cache and price_hash_cache[supplier_id] == new_hash:
+                    print(f"✅ {supplier_name}: Дані не змінилися, XML не оновлюємо")
+                else:
+                    print(f"🔄 {supplier_name}: Дані змінилися, оновлюємо XML")
+                    price_hash_cache[supplier_id] = new_hash
+                    create_xml(supplier_id, supplier_name, sheet_id, supplier)
+                    updated_suppliers.append(supplier_name)
+
+            except gspread.exceptions.APIError as e:
+                if "429" in str(e):
+                    print(f"⚠️ Ліміт запитів вичерпано для {supplier_name}. Чекаємо 60 сек...")
+                    time.sleep(60)  # Уникаємо блокування API
+                    continue
+                else:
+                    print(f"❌ Помилка обробки {supplier_name}: {e}")
+
+        if updated_suppliers:
+            print(f"✅ Оновлено XML для: {', '.join(updated_suppliers)}")
+        else:
+            print("✅ Жодних змін не знайдено, оновлення не потрібне.")
+
+        print("🔄 [Manual Update] Ручне оновлення завершено.")
+
+    # Запускаємо процес генерації у окремому потоці, щоб не блокувати сервер
+    thread = threading.Thread(target=process_generation)
     thread.start()
-    return {"status": "Генерація XML запущена"}
+    
+    return {"status": "Генерація XML запущена у фоновому режимі"}
 
 @app.get("/XML_prices/google_sheet_to_xml/status")
 def status():
