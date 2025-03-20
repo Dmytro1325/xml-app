@@ -165,27 +165,41 @@ async def periodic_update():
         supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
         updated_suppliers = []
 
-        for supplier in supplier_data:
-            supplier_id = str(supplier["Post_ID"])
-            supplier_name = supplier["Supplier Name"]
-            sheet_id = supplier["Google Sheet ID"]
+        batch_size = 5  # Обробляємо по 5 постачальників за один цикл
+        for i in range(0, len(supplier_data), batch_size):
+            batch = supplier_data[i:i + batch_size]
 
-            try:
-                sheet = client.open_by_key(sheet_id).sheet1
-                new_hash = get_price_hash(sheet)
+            for supplier in batch:
+                supplier_id = str(supplier["Post_ID"])
+                supplier_name = supplier["Supplier Name"]
+                sheet_id = supplier["Google Sheet ID"]
 
-                if supplier_id in price_hash_cache and price_hash_cache[supplier_id] == new_hash:
-                    print(f"✅ {supplier_name}: Дані не змінилися, XML не оновлюємо")
-                else:
-                    print(f"🔄 {supplier_name}: Дані змінилися, оновлюємо XML")
-                    price_hash_cache[supplier_id] = new_hash
-                    create_xml(supplier_id, supplier_name, sheet_id, supplier)
-                    updated_suppliers.append(supplier_name)
+                try:
+                    sheet = client.open_by_key(sheet_id).sheet1
+                    time.sleep(2)  # Запобігаємо перевантаженню API
+                    new_hash = get_price_hash(sheet)
 
-            except Exception as e:
-                print(f"❌ Помилка обробки {supplier_name}: {e}")
+                    if supplier_id in price_hash_cache and price_hash_cache[supplier_id] == new_hash:
+                        print(f"✅ {supplier_name}: Дані не змінилися, XML не оновлюємо")
+                    else:
+                        print(f"🔄 {supplier_name}: Дані змінилися, оновлюємо XML")
+                        price_hash_cache[supplier_id] = new_hash
+                        create_xml(supplier_id, supplier_name, sheet_id, supplier)
+                        updated_suppliers.append(supplier_name)
 
-        await asyncio.sleep(UPDATE_INTERVAL)
+                except gspread.exceptions.APIError as e:
+                    if "429" in str(e):
+                        print(f"⚠️ Ліміт запитів вичерпано для {supplier_name}. Чекаємо 30 сек...")
+                        time.sleep(30)  # Чекаємо, щоб уникнути блокування API
+                        continue
+                    else:
+                        print(f"❌ Помилка обробки {supplier_name}: {e}")
+
+            print("⏳ Чекаємо 10 секунд перед наступною групою постачальників...")
+            await asyncio.sleep(10)  # Робимо паузу між групами
+
+        print("✅ [Auto-Update] Перевірку завершено, чекаємо на наступний цикл...")
+        await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо 30 хвилин до наступного оновлення
 
 @app.on_event("startup")
 async def startup_event():
