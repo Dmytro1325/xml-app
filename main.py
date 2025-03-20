@@ -65,40 +65,77 @@ def log_to_file(log_type, content):
 def create_xml(supplier_id, supplier_name, sheet_id):
     xml_file = os.path.join(XML_DIR, f"{supplier_id}.xml")
     log_content = f"📥 Обробка: {supplier_name} ({sheet_id})\n"
+    
     try:
         spreadsheet = client.open_by_key(sheet_id)
         sheets = spreadsheet.worksheets()
         combined_data = []
+        
         for sheet in sheets:
-            data = sheet.get_all_values()
-            if len(data) < 2:
-                log_content += f"⚠️ Аркуш {sheet.title} порожній\n"
+            try:
+                data = sheet.get_all_values()
+                if len(data) < 2:
+                    log_content += f"⚠️ Аркуш {sheet.title} порожній\n"
+                    continue
+                combined_data.extend(data[1:])
+            except gspread.exceptions.APIError as e:
+                log_content += f"❌ Помилка доступу до аркуша {sheet.title}: {e}\n"
                 continue
-            combined_data.extend(data[1:])
+        
         if not combined_data:
             log_content += f"⚠️ {supplier_name} немає даних\n"
             log_to_file("error", log_content)
             return
+        
         root = ET.Element("products")
         for row in combined_data:
             product = ET.SubElement(root, "product")
             ET.SubElement(product, "id").text = row[0] if len(row) > 0 else "-"
             ET.SubElement(product, "name").text = row[1] if len(row) > 1 else "-"
             ET.SubElement(product, "price").text = row[3] if len(row) > 3 else "0"
+        
         ET.ElementTree(root).write(xml_file, encoding="utf-8", xml_declaration=True)
         log_content += f"✅ XML {xml_file} збережено ({len(combined_data)} товарів)\n"
         log_to_file("success", log_content)
+    
     except gspread.exceptions.APIError as e:
         log_content += f"❌ Помилка доступу до {supplier_name}: {e}\n"
         log_to_file("error", log_content)
+    
+    except Exception as e:
+        log_content += f"❌ Невідома помилка при обробці {supplier_name}: {e}\n"
+        log_to_file("error", log_content)
+
 
 # Автоматичне оновлення XML
 async def periodic_update():
     while True:
-        supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
-        for supplier in supplier_data:
-            create_xml(str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"])
-        await asyncio.sleep(UPDATE_INTERVAL)
+        print("🔄 [Auto-Update] Починаємо перевірку змін у Google Sheets...")
+
+        try:
+            supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
+        except gspread.exceptions.APIError as e:
+            print(f"❌ Помилка доступу до головної таблиці: {e}")
+            await asyncio.sleep(UPDATE_INTERVAL)
+            continue
+        
+        batch_size = 5  # Групуємо по 5 таблиць для зменшення навантаження на API
+
+        for i in range(0, len(supplier_data), batch_size):
+            batch = supplier_data[i:i + batch_size]
+            for supplier in batch:
+                try:
+                    create_xml(str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"])
+                except Exception as e:
+                    print(f"❌ Помилка обробки {supplier['Supplier Name']}: {e}")
+                    continue
+            
+            print("⏳ Чекаємо 10 секунд перед наступною групою постачальників...")
+            await asyncio.sleep(10)  # Робимо паузу між групами
+        
+        print("✅ [Auto-Update] Перевірку завершено, чекаємо на наступний цикл...")
+        await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо 30 хвилин до наступного оновлення
+
 
 # API
 app = FastAPI(
@@ -150,9 +187,23 @@ def view_log(filename: str):
 
 @app.post("/XML_prices/google_sheet_to_xml/generate")
 def generate():
-    thread = threading.Thread(target=lambda: [create_xml(str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"]) for supplier in spreadsheet.worksheet("Sheet1").get_all_records()])
+    def process_generation():
+        try:
+            supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
+            for supplier in supplier_data:
+                try:
+                    create_xml(str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"])
+                    time.sleep(2)  # Уникаємо перевищення ліміту запитів
+                except Exception as e:
+                    print(f"❌ Помилка генерації {supplier['Supplier Name']}: {e}")
+                    continue
+        except gspread.exceptions.APIError as e:
+            print(f"❌ Помилка доступу до головної таблиці: {e}")
+
+    thread = threading.Thread(target=process_generation)
     thread.start()
     return {"status": "Генерація XML запущена"}
+
 
 
 @app.get("/XML_prices/google_sheet_to_xml/status")
