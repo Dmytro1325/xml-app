@@ -347,6 +347,35 @@ async def startup_event():
     asyncio.ensure_future(periodic_update())  # Запускаємо фоновий процес оновлення XML
 
 
+@app.get("/logs/", response_class=HTMLResponse)
+def list_logs(request: Request):
+    """
+    Виводить список файлів логів у вигляді HTML-таблиці
+    """
+    try:
+        log_files = [
+            {"name": f, "size": os.path.getsize(os.path.join(LOG_DIR, f))}
+            for f in os.listdir(LOG_DIR) if f.endswith(".log") or f.endswith(".txt")
+        ]
+    except FileNotFoundError:
+        log_files = []
+
+    return templates.TemplateResponse("log_list.html", {"request": request, "logs": log_files})
+
+@app.get("/logs/view/{filename}", response_class=HTMLResponse)
+def view_log(filename: str):
+    """
+    Відображає вміст лог-файлу у браузері
+    """
+    file_path = os.path.join(LOG_DIR, filename)
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="utf-8") as file:
+            log_content = file.read().replace("\n", "<br>")
+        return f"<html><body><pre>{log_content}</pre></body></html>"
+    raise HTTPException(status_code=404, detail="Файл не знайдено")
+
+
+
 
 
 @app.post("/XML_prices/google_sheet_to_xml/generate")
