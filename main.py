@@ -232,8 +232,7 @@ def view_debug_log():
 
 @app.on_event("startup")
 async def startup_event():
-    loop = asyncio.get_event_loop()
-    loop.create_task(periodic_update())  # Запускаємо без очікування
+    asyncio.ensure_future(periodic_update())
 
 
 
