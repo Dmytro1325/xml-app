@@ -85,7 +85,7 @@ def get_google_client():
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            session = requests.Session()
+            session = Requests.Session()
             creds.refresh(GoogleRequest(session))  # Використовуємо правильний `Request`
             print("🔄 Токен оновлено")
         else:
