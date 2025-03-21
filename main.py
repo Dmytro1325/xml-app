@@ -58,16 +58,20 @@ TOKEN_FILE = json.loads(TOKEN_JSON)
 CREDENTIALS_FILE = json.loads(GOOGLE_CREDENTIALS)
 
 def get_google_client():
+    """ Функція авторизації в Google Sheets """
+    log_filename = get_log_filename()  # Створюємо лог-файл
     creds = Credentials.from_authorized_user_info(TOKEN_FILE)
+
     if not creds or not creds.valid:
         if creds.expired and creds.refresh_token:
             creds.refresh(GoogleRequest(requests.Session()))
-            log_to_file("🔄 Токен оновлено")
+            log_to_file("🔄 Токен оновлено", log_filename)  # Передаємо log_filename
         else:
             flow = InstalledAppFlow.from_client_config(
                 CREDENTIALS_FILE, ["https://www.googleapis.com/auth/spreadsheets"]
             )
             creds = flow.run_local_server(port=8080)
+
     return gspread.authorize(creds)
 
 client = get_google_client()
