@@ -125,15 +125,14 @@ def clean_price(value):
 
 # 🔹 Функція генерації XML
 # 🔹 Функція для створення XML
-def create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename):
-    """ Генерація XML з унікальним лог-файлом """
-    log_filename = get_log_filename()  # Генеруємо окремий лог
-    xml_file = os.path.join(XML_DIR, f"{supplier_id}.xml")
 
+def create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename):
+    """ Генерація XML з унікальним лог-файлом для кожного запуску """
+    xml_file = os.path.join(XML_DIR, f"{supplier_id}.xml")
     log_to_file(f"📥 Обробка: {supplier_name} ({sheet_id})", log_filename)
 
     retry_count = 0
-    max_retries = 5  # Спроба до 5 разів при помилці 429
+    max_retries = 5  
 
     while retry_count < max_retries:
         try:
@@ -144,12 +143,12 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename):
             for sheet in sheets:
                 data = sheet.get_all_values()
                 if len(data) < 2:
-                    log_to_file(f"⚠️ Аркуш {sheet.title} порожній")
+                    log_to_file(f"⚠️ Аркуш {sheet.title} порожній", log_filename)
                     continue
-                combined_data.extend(data[1:])  # Пропускаємо заголовки
+                combined_data.extend(data[1:])  
 
             if not combined_data:
-                log_to_file(f"⚠️ {supplier_name} немає даних")
+                log_to_file(f"⚠️ {supplier_name} немає даних", log_filename)
                 return
 
             root = ET.Element("products")
@@ -161,51 +160,30 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename):
                 name = safe_get_value(row, columns.get("Name"))
                 stock = safe_get_value(row, columns.get("Stock"), "true")
                 price = clean_price(safe_get_value(row, columns.get("Price"), "0"))
-                sku = safe_get_value(row, columns.get("SKU"))
-                rrp = clean_price(safe_get_value(row, columns.get("RRP")))
-                currency = safe_get_value(row, columns.get("Currency"), "UAH")
 
-                # Пропускаємо товари без обов’язкових полів
                 if not product_id or not name or not price:
-                    log_to_file(f"❌ Пропускаємо рядок: {row}, оскільки відсутні ID, Name або Price")
+                    log_to_file(f"❌ Пропускаємо рядок: {row}, оскільки відсутні ID, Name або Price", log_filename)
                     skipped_count += 1
                     continue
 
-                # Лог перед додаванням у XML
-                log_to_file(f"   ✅ Додаємо товар: id='{product_id}', name='{name}', price='{price}', stock='{stock}'")
+                log_to_file(f"✅ Додаємо товар: id='{product_id}', name='{name}', price='{price}', stock='{stock}'", log_filename)
 
                 product = ET.SubElement(root, "product")
                 ET.SubElement(product, "id").text = product_id
                 ET.SubElement(product, "name").text = name
                 ET.SubElement(product, "stock").text = stock
                 ET.SubElement(product, "price").text = price
-                ET.SubElement(product, "currency").text = currency
-
-                if sku:
-                    ET.SubElement(product, "sku").text = sku
-                if rrp and rrp != "0":
-                    ET.SubElement(product, "rrp").text = rrp
 
                 processed_count += 1
 
-            # Збереження XML
             ET.ElementTree(root).write(xml_file, encoding="utf-8", xml_declaration=True)
-            log_to_file(f"✅ XML {xml_file} збережено ({processed_count} товарів, пропущено {skipped_count})")
+            log_to_file(f"✅ XML {xml_file} збережено ({processed_count} товарів, пропущено {skipped_count})", log_filename)
 
-            time.sleep(random.uniform(1.5, 2.5))  # Запобігаємо перевантаженню API
             return
 
         except gspread.exceptions.APIError as e:
-            if "429" in str(e):
-                retry_count += 1
-                wait_time = retry_count * 20
-                log_to_file(f"⚠️ Ліміт перевищено. Повторна спроба {retry_count}/{max_retries} через {wait_time} сек.")
-                time.sleep(wait_time)
-            else:
-                log_to_file(f"❌ Помилка доступу до {supplier_name}: {e}")
-                return
-
-    log_to_file(f"✅ XML {xml_file} збережено", log_filename)
+            log_to_file(f"❌ Помилка доступу до {supplier_name}: {e}", log_filename)
+            return
 
 
 def get_price_hash(sheet):
@@ -222,24 +200,23 @@ def get_price_hash(sheet):
 
 async def periodic_update():
     """
-    Фоновий процес, який оновлює тільки ті XML-файли, які змінилися,
-    з урахуванням кешу та обмеження на запити.
-    Використовує динамічний мапінг полів з головної таблиці.
+    Фоновий процес, який оновлює тільки ті XML-файли, які змінилися.
+    Лог-файл створюється один на весь цикл.
     """
     while True:
-        log_filename = f"{LOG_DIR}/update_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        log_filename = get_log_filename()  # Один лог-файл для всього запуску
         log_to_file("🔄 [Auto-Update] Починаємо перевірку змін у Google Sheets...", log_filename)
 
         try:
             supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
         except gspread.exceptions.APIError as e:
             log_to_file(f"❌ Помилка доступу до головної таблиці: {e}", log_filename)
-            await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо 30 хвилин
+            await asyncio.sleep(UPDATE_INTERVAL)
             continue
 
         updated_suppliers = []
         skipped_suppliers = []
-        batch_size = 5  # Обробляємо по 5 постачальників за один цикл
+        batch_size = 5  
 
         for i in range(0, len(supplier_data), batch_size):
             batch = supplier_data[i:i + batch_size]
@@ -250,10 +227,9 @@ async def periodic_update():
                 sheet_id = supplier["Google Sheet ID"]
 
                 if supplier_id in skipped_suppliers:
-                    log_to_file(f"⚠️ {supplier_name}: Пропускаємо, бо в попередньому циклі було перевищено ліміт API.", log_filename)
+                    log_to_file(f"⚠️ {supplier_name}: Пропускаємо через API-ліміт.", log_filename)
                     continue
 
-                # 📌 Динамічно отримуємо мапінг полів для кожного постачальника
                 columns = {
                     "ID": supplier["ID Column"] if supplier["ID Column"] != "-" else None,
                     "Name": supplier["Name Column"] if supplier["Name Column"] != "-" else None,
@@ -265,43 +241,42 @@ async def periodic_update():
                 }
 
                 retry_count = 0
-                max_retries = 5  # Повторюємо до 5 разів у разі помилки
+                max_retries = 5 
 
                 while retry_count < max_retries:
                     try:
                         sheet = client.open_by_key(sheet_id).sheet1
-                        await asyncio.sleep(random.uniform(2, 5))  # Запобігаємо перевантаженню API
-                        
+                        await asyncio.sleep(random.uniform(2, 5))  
+
                         new_hash = get_price_hash(sheet)
 
                         if supplier_id in price_hash_cache and price_hash_cache[supplier_id] == new_hash:
                             log_to_file(f"⏭️ {supplier_name}: Немає змін, пропускаємо...", log_filename)
-                            break  # Виходимо з циклу while
+                            break  
 
-                        price_hash_cache[supplier_id] = new_hash  # Оновлюємо кеш
+                        price_hash_cache[supplier_id] = new_hash  
 
-                        # ✅ Використовуємо отримані **динамічні поля**
                         create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename)
 
                         updated_suppliers.append(supplier_name)
-                        break  # Виходимо з циклу while після успішного виконання
+                        break  
 
                     except gspread.exceptions.APIError as e:
                         if "429" in str(e):
                             retry_count += 1
                             wait_time = retry_count * 20
                             log_to_file(f"⚠️ Ліміт запитів вичерпано для {supplier_name}. Повторна спроба {retry_count}/{max_retries} через {wait_time} сек.", log_filename)
-                            await asyncio.sleep(wait_time)  # Чекаємо перед повторною спробою
+                            await asyncio.sleep(wait_time)  
                         else:
                             log_to_file(f"❌ Помилка обробки {supplier_name}: {e}", log_filename)
-                            break  # Виходимо з циклу while, якщо це не помилка 429
+                            break  
 
                 if retry_count == max_retries:
-                    log_to_file(f"❌ {supplier_name}: Всі {max_retries} спроби провалилися. Пропускаємо.", log_filename)
+                    log_to_file(f"❌ {supplier_name}: Всі {max_retries} спроби провалилися.", log_filename)
                     skipped_suppliers.append(supplier_id)
 
-        log_to_file(f"✅ [Auto-Update] Оновлено {len(updated_suppliers)} постачальників, чекаємо на наступний цикл...", log_filename)
-        await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо 30 хвилин до наступної перевірки
+        log_to_file(f"✅ [Auto-Update] Оновлено {len(updated_suppliers)} постачальників, чекаємо наступний цикл...", log_filename)
+        await asyncio.sleep(UPDATE_INTERVAL)
 
 
 
@@ -413,9 +388,13 @@ app.mount("/logs/", StaticFiles(directory=os.path.abspath(LOG_DIR)), name="logs"
 
 @app.post("/XML_prices/google_sheet_to_xml/generate")
 def generate():
+    log_filename = get_log_filename()
+    log_to_file("🚀 [Manual Start] Генерація XML вручну розпочата", log_filename)
+
     threading.Thread(target=lambda: [
         create_xml(str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"], 
-                   {"ID": "A", "Name": "B", "Price": "D"})
+                   {"ID": "A", "Name": "B", "Price": "D"}, log_filename)
         for supplier in spreadsheet.worksheet("Sheet1").get_all_records()
     ]).start()
+
     return {"status": "Генерація XML запущена"}
