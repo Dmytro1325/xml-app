@@ -391,7 +391,7 @@ def view_log(request: Request, filename: str):
     return templates.TemplateResponse("log_view.html", {
         "request": request,
         "filename": safe_filename,
-        "log_content": log_content.replace("\n", "<br>")  # Додаємо правильне форматування
+        "log_content": log_content
     })
 
 
