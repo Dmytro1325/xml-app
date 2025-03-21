@@ -186,7 +186,7 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename):
             return
 
 
-def get_price_hash(sheet):
+def get_price_hash(sheet, log_filename):
     """
     Генерує хеш для даних з Google Sheets, щоб визначити, чи змінилися вони.
     """
@@ -195,7 +195,7 @@ def get_price_hash(sheet):
         data_str = json.dumps(data, sort_keys=True)  # Конвертуємо в JSON
         return hashlib.md5(data_str.encode()).hexdigest()  # Повертаємо MD5-хеш
     except Exception as e:
-        log_to_file(f"⚠️ Помилка генерації хешу для {sheet.title}: {e}")
+        log_to_file(f"⚠️ Помилка генерації хешу для {sheet.title}: {e}", log_filename)
         return None
 
 async def periodic_update():
@@ -241,14 +241,14 @@ async def periodic_update():
                 }
 
                 retry_count = 0
-                max_retries = 5 
+                max_retries = 5  
 
                 while retry_count < max_retries:
                     try:
                         sheet = client.open_by_key(sheet_id).sheet1
                         await asyncio.sleep(random.uniform(2, 5))  
 
-                        new_hash = get_price_hash(sheet)
+                        new_hash = get_price_hash(sheet, log_filename)  # Передаємо log_filename
 
                         if supplier_id in price_hash_cache and price_hash_cache[supplier_id] == new_hash:
                             log_to_file(f"⏭️ {supplier_name}: Немає змін, пропускаємо...", log_filename)
@@ -277,6 +277,7 @@ async def periodic_update():
 
         log_to_file(f"✅ [Auto-Update] Оновлено {len(updated_suppliers)} постачальників, чекаємо наступний цикл...", log_filename)
         await asyncio.sleep(UPDATE_INTERVAL)
+
 
 
 
