@@ -2,7 +2,7 @@ replicaCount: 1
 image:
   repository: your-docker-username/xml-app
   pullPolicy: Always
-  tag: "v0.1.6-101a97d"
+  tag: "v0.1.7-2a5f02c"
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
