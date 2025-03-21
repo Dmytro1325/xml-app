@@ -374,7 +374,7 @@ def list_logs(request: Request):
 app.mount("/logs/", StaticFiles(directory=os.path.abspath(LOG_DIR)), name="logs")
 
 
-@app.get("/logs/view/{filename}", response_class=HTMLResponse)
+@app.get("/logs/{filename}", response_class=HTMLResponse)
 def view_log(filename: str):
     """
     Відображає вміст лог-файлу у браузері з покращеним форматуванням.
