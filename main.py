@@ -246,38 +246,40 @@ def get_price_hash(sheet, log_filename):
         return None
 
 async def periodic_update():
-    """ Фоновий процес для оновлення XML-файлів, з обробкою помилок 429 """
+    """
+    Фоновий процес, який оновлює тільки ті XML-файли, які змінилися.
+    Лог-файл створюється один на весь цикл.
+    """
     while True:
         log_filename = get_log_filename()  # Один лог-файл для всього запуску
         log_to_file("🔄 [Auto-Update] Починаємо перевірку змін у Google Sheets...", log_filename)
 
         retry_count = 0
-        max_retries = 5  # До 5 спроб у разі помилки 429
+        max_retries = 5  
 
         while retry_count < max_retries:
             try:
-                # Отримуємо дані з головної таблиці
                 supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
                 break  # Вийти з циклу, якщо отримали дані без помилок
 
             except gspread.exceptions.APIError as e:
-                if "429" in str(e):  # Якщо перевищено ліміт API
+                if "429" in str(e):
                     retry_count += 1
-                    wait_time = retry_count * 20  # Динамічне збільшення очікування
+                    wait_time = min(retry_count * 20, MAX_RETRY_TIME)
                     log_to_file(f"⚠️ Перевищено ліміт API Google Sheets. Повторна спроба {retry_count}/{max_retries} через {wait_time} сек.", log_filename)
                     await asyncio.sleep(wait_time)
                 else:
                     log_to_file(f"❌ Помилка доступу до головної таблиці: {e}", log_filename)
-                    return  # Вихід, якщо це не 429-помилка
+                    return
 
         if retry_count == max_retries:
             log_to_file("❌ Всі спроби доступу до Google Sheets провалилися. Пропускаємо цей цикл.", log_filename)
             await asyncio.sleep(UPDATE_INTERVAL)
-            continue  # Перехід до наступного циклу
+            continue  
 
         updated_suppliers = []
         skipped_suppliers = []
-        batch_size = 3  # **Оптимізація: обробляємо 3 постачальники за цикл**
+        batch_size = 5  
 
         for i in range(0, len(supplier_data), batch_size):
             batch = supplier_data[i:i + batch_size]
@@ -287,30 +289,44 @@ async def periodic_update():
                 supplier_name = supplier["Supplier Name"]
                 sheet_id = supplier["Google Sheet ID"]
 
-                # **Запобігання перевантаженню API**
-                await asyncio.sleep(random.uniform(5, 10))  
+                if supplier_id in skipped_suppliers:
+                    log_to_file(f"⚠️ {supplier_name}: Пропускаємо через API-ліміт.", log_filename)
+                    continue
+
+                columns = {
+                    "ID": supplier["ID Column"] if supplier["ID Column"] != "-" else None,
+                    "Name": supplier["Name Column"] if supplier["Name Column"] != "-" else None,
+                    "Stock": supplier["Stock Column"] if supplier["Stock Column"] != "-" else None,
+                    "Price": supplier["Price Column"] if supplier["Price Column"] != "-" else None,
+                    "SKU": supplier["SKU Column"] if supplier["SKU Column"] != "-" else None,
+                    "RRP": supplier["RRP Column"] if supplier["RRP Column"] != "-" else None,
+                    "Currency": supplier["Currency Column"] if supplier["Currency Column"] != "-" else None
+                }
 
                 retry_count = 0
 
                 while retry_count < max_retries:
                     try:
                         sheet = client.open_by_key(sheet_id).sheet1
+                        await asyncio.sleep(random.uniform(2, 5))  
 
-                        # **Перевіряємо хеш змін**
-                        new_hash = get_price_hash(sheet, log_filename)
+                        new_hash = get_price_hash(sheet, log_filename) 
+
                         if supplier_id in price_hash_cache and price_hash_cache[supplier_id] == new_hash:
                             log_to_file(f"⏭️ {supplier_name}: Немає змін, пропускаємо...", log_filename)
                             break  
 
                         price_hash_cache[supplier_id] = new_hash  
-                        create_xml(supplier_id, supplier_name, sheet_id, {}, log_filename)
+
+                        create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename)
+
                         updated_suppliers.append(supplier_name)
                         break  
 
                     except gspread.exceptions.APIError as e:
                         if "429" in str(e):
                             retry_count += 1
-                            wait_time = retry_count * 20
+                            wait_time = min(retry_count * 20, MAX_RETRY_TIME)
                             log_to_file(f"⚠️ Перевищено ліміт API Google Sheets для {supplier_name}. Повторна спроба {retry_count}/{max_retries} через {wait_time} сек.", log_filename)
                             await asyncio.sleep(wait_time)  
                         else:
@@ -321,9 +337,11 @@ async def periodic_update():
                     log_to_file(f"❌ {supplier_name}: Всі {max_retries} спроби провалилися.", log_filename)
                     skipped_suppliers.append(supplier_id)
 
-        log_to_file(f"✅ [Auto-Update] Оновлено {len(updated_suppliers)} постачальників. Чекаємо наступний цикл...", log_filename)
-        await asyncio.sleep(UPDATE_INTERVAL)
+        log_to_file(f"✅ [Auto-Update] Оновлено {len(updated_suppliers)} постачальників, чекаємо наступний цикл...", log_filename)
 
+        cleanup_old_logs()  # Очищення логів старших за 7 днів перед кожним новим циклом
+
+        await asyncio.sleep(UPDATE_INTERVAL)
 
 
 
