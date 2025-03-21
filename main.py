@@ -125,7 +125,7 @@ def clean_price(value):
 
 # 🔹 Функція генерації XML
 # 🔹 Функція для створення XML
-def create_xml(supplier_id, supplier_name, sheet_id, columns):
+def create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename):
     """ Генерація XML з унікальним лог-файлом """
     log_filename = get_log_filename()  # Генеруємо окремий лог
     xml_file = os.path.join(XML_DIR, f"{supplier_id}.xml")
@@ -227,12 +227,13 @@ async def periodic_update():
     Використовує динамічний мапінг полів з головної таблиці.
     """
     while True:
-        log_to_file("🔄 [Auto-Update] Починаємо перевірку змін у Google Sheets...")
+        log_filename = f"{LOG_DIR}/update_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        log_to_file("🔄 [Auto-Update] Починаємо перевірку змін у Google Sheets...", log_filename)
 
         try:
             supplier_data = spreadsheet.worksheet("Sheet1").get_all_records()
         except gspread.exceptions.APIError as e:
-            log_to_file(f"❌ Помилка доступу до головної таблиці: {e}")
+            log_to_file(f"❌ Помилка доступу до головної таблиці: {e}", log_filename)
             await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо 30 хвилин
             continue
 
@@ -249,7 +250,7 @@ async def periodic_update():
                 sheet_id = supplier["Google Sheet ID"]
 
                 if supplier_id in skipped_suppliers:
-                    log_to_file(f"⚠️ {supplier_name}: Пропускаємо, бо в попередньому циклі було перевищено ліміт API.")
+                    log_to_file(f"⚠️ {supplier_name}: Пропускаємо, бо в попередньому циклі було перевищено ліміт API.", log_filename)
                     continue
 
                 # 📌 Динамічно отримуємо мапінг полів для кожного постачальника
@@ -274,13 +275,13 @@ async def periodic_update():
                         new_hash = get_price_hash(sheet)
 
                         if supplier_id in price_hash_cache and price_hash_cache[supplier_id] == new_hash:
-                            log_to_file(f"⏭️ {supplier_name}: Немає змін, пропускаємо...")
+                            log_to_file(f"⏭️ {supplier_name}: Немає змін, пропускаємо...", log_filename)
                             break  # Виходимо з циклу while
 
                         price_hash_cache[supplier_id] = new_hash  # Оновлюємо кеш
 
                         # ✅ Використовуємо отримані **динамічні поля**
-                        create_xml(supplier_id, supplier_name, sheet_id, columns)
+                        create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename)
 
                         updated_suppliers.append(supplier_name)
                         break  # Виходимо з циклу while після успішного виконання
@@ -289,17 +290,17 @@ async def periodic_update():
                         if "429" in str(e):
                             retry_count += 1
                             wait_time = retry_count * 20
-                            log_to_file(f"⚠️ Ліміт запитів вичерпано для {supplier_name}. Повторна спроба {retry_count}/{max_retries} через {wait_time} сек.")
+                            log_to_file(f"⚠️ Ліміт запитів вичерпано для {supplier_name}. Повторна спроба {retry_count}/{max_retries} через {wait_time} сек.", log_filename)
                             await asyncio.sleep(wait_time)  # Чекаємо перед повторною спробою
                         else:
-                            log_to_file(f"❌ Помилка обробки {supplier_name}: {e}")
+                            log_to_file(f"❌ Помилка обробки {supplier_name}: {e}", log_filename)
                             break  # Виходимо з циклу while, якщо це не помилка 429
 
                 if retry_count == max_retries:
-                    log_to_file(f"❌ {supplier_name}: Всі {max_retries} спроби провалилися. Пропускаємо.")
+                    log_to_file(f"❌ {supplier_name}: Всі {max_retries} спроби провалилися. Пропускаємо.", log_filename)
                     skipped_suppliers.append(supplier_id)
 
-        log_to_file(f"✅ [Auto-Update] Оновлено {len(updated_suppliers)} постачальників, чекаємо на наступний цикл...")
+        log_to_file(f"✅ [Auto-Update] Оновлено {len(updated_suppliers)} постачальників, чекаємо на наступний цикл...", log_filename)
         await asyncio.sleep(UPDATE_INTERVAL)  # Чекаємо 30 хвилин до наступної перевірки
 
 
