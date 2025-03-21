@@ -28,6 +28,17 @@ DEBUG_LOG_FILE = os.path.join(LOG_DIR, "debug_log.html")  # Файл, а не д
 UPDATE_INTERVAL = 1800  # 30 хвилин
 price_hash_cache = {}
 
+def cleanup_old_logs():
+    """ Видаляє всі логи, які старші за 7 днів """
+    now = time.time()
+    for log_file in os.listdir(LOG_DIR):
+        file_path = os.path.join(LOG_DIR, log_file)
+        if os.path.isfile(file_path) and file_path.startswith("log_") and file_path.endswith(".html"):
+            if os.stat(file_path).st_mtime < now - 7 * 86400:
+                os.remove(file_path)
+                print(f"🗑 Видалено старий лог: {log_file}")
+
+
 # 🔹 Створення директорій
 for dir_path in [XML_DIR, os.path.dirname(DEBUG_LOG_FILE)]:
     os.makedirs(dir_path, exist_ok=True)
