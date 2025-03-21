@@ -23,7 +23,7 @@ import urllib.parse
 MASTER_SHEET_ID = "1z16Xcj_58R2Z-JGOMuyx4GpVdQqDn1UtQirCxOrE_hc"
 XML_DIR = "/output"
 LOG_DIR = "/logs"
-DEBUG_LOG_FILE = os.path.join(LOG_DIR, "debug_logs", "debug_log.html")
+DEBUG_LOG_FILE = os.path.join(LOG_DIR, "debug_log.html")  # Файл, а не директорія!
 UPDATE_INTERVAL = 1800  # 30 хвилин
 price_hash_cache = {}
 
