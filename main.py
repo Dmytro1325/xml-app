@@ -362,8 +362,8 @@ def list_logs(request: Request):
     """
     try:
         log_files = [
-            {"name": f, "size": os.path.getsize(os.path.join(LOG_DIR, f))}
-            for f in os.listdir(LOG_DIR)
+        {"name": f, "size": os.path.getsize(os.path.join(LOG_DIR, f))}
+        for f in os.listdir(LOG_DIR) if os.path.isfile(os.path.join(LOG_DIR, f))
         ]
     except FileNotFoundError:
         log_files = []
@@ -410,8 +410,9 @@ def view_log(filename: str):
         """
     raise HTTPException(status_code=404, detail="❌ Файл не знайдено")
 
-app.mount("/logs/", StaticFiles(directory=os.path.join(LOG_DIR, "debug_log.html")), name="logs")
-DEBUG_LOG_FILE = os.path.join(LOG_DIR, "debug_log.html")  # Файл, а не директорія!
+app.mount("/logs/", StaticFiles(directory=os.path.abspath(LOG_DIR)), name="logs")
+
+
 
 @app.post("/XML_prices/google_sheet_to_xml/generate")
 def generate():
