@@ -2,22 +2,54 @@
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Лог-файл: {{ filename }}</title>
     <style>
-        body { font-family: monospace; background: #f4f4f4; margin: 20px; }
-        .container { max-width: 1000px; margin: auto; }
-        pre { background: white; padding: 20px; border-radius: 8px;
-              box-shadow: 0 0 10px rgba(0,0,0,0.1); white-space: pre-wrap;
-              word-wrap: break-word; overflow-x: auto; max-height: 80vh; overflow-y: auto; }
-        .btn { display: inline-block; margin-top: 10px; padding: 10px 15px;
-               background: purple; color: white; text-decoration: none; border-radius: 5px; }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 90%;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h2 {
+            text-align: center;
+        }
+        pre {
+            background: #1e1e1e;
+            color: #dcdcdc;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: monospace;
+        }
+        .back-link {
+            display: block;
+            margin-top: 10px;
+            text-align: center;
+            font-size: 16px;
+            text-decoration: none;
+            color: #007BFF;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>📜 Лог-файл: {{ filename }}</h2>
-        <pre>{{ log_content }}</pre>
-        <a href="/logs/" class="btn">⬅️ Назад до списку логів</a>
+        <pre>{{ log_content | safe }}</pre>
+        <a href="/logs/" class="back-link">⬅️ Назад до списку логів</a>
     </div>
 </body>
 </html>

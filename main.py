@@ -37,12 +37,21 @@ for dir_path in [XML_DIR, os.path.dirname(DEBUG_LOG_FILE)]:
 # 🔹 Функція логування
 def log_to_file(content):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = f"[{timestamp}] {content}\n"
+
+    # 🔹 Автоматичне форматування за ключовими словами
+    if "✅" in content:
+        content = f'<span style="color:green;">{content}</span>'
+    elif "⚠️" in content:
+        content = f'<span style="color:orange;">{content}</span>'
+    elif "❌" in content:
+        content = f'<span style="color:red;">{content}</span>'
+    elif "🔄" in content:
+        content = f'<span style="color:blue;">{content}</span>'
+
+    log_entry = f"[{timestamp}] {content}<br>\n"
 
     with open(DEBUG_LOG_FILE, "a", encoding="utf-8") as f:
         f.write(log_entry)
-
-    #print(log_entry.strip())  # Виводимо в консоль
 
 # 🔹 Авторизація Google Sheets
 GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")
