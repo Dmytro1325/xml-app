@@ -17,6 +17,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request as GoogleRequest
 import random
 import hashlib
+import urllib.parse
 
 # 🔹 Конфігурація
 MASTER_SHEET_ID = "1z16Xcj_58R2Z-JGOMuyx4GpVdQqDn1UtQirCxOrE_hc"
@@ -368,15 +369,38 @@ app.mount("/logs/", StaticFiles(directory=os.path.abspath(LOG_DIR)), name="logs"
 @app.get("/logs/view/{filename}", response_class=HTMLResponse)
 def view_log(filename: str):
     """
-    Відображає вміст лог-файлу у браузері
+    Відображає вміст лог-файлу у браузері з покращеним форматуванням.
     """
-    file_path = os.path.join(LOG_DIR, filename)
+    safe_filename = urllib.parse.unquote(filename)  # Розкодування URL (якщо містить пробіли або спецсимволи)
+    file_path = os.path.join(LOG_DIR, safe_filename)
+
+    # Безпека: перевіряємо, чи файл знаходиться в межах LOG_DIR
+    if not file_path.startswith(os.path.abspath(LOG_DIR)):
+        raise HTTPException(status_code=403, detail="⛔ Доступ заборонено!")
+
     if os.path.exists(file_path):
         with open(file_path, "r", encoding="utf-8") as file:
             log_content = file.read().replace("\n", "<br>")
-        return f"<html><body><pre>{log_content}</pre></body></html>"
-    raise HTTPException(status_code=404, detail="Файл не знайдено")
 
+        return f"""
+        <!DOCTYPE html>
+        <html lang="uk">
+        <head>
+            <meta charset="UTF-8">
+            <title>Лог-файл: {safe_filename}</title>
+            <style>
+                body {{ font-family: monospace; background: #f4f4f4; margin: 20px; }}
+                pre {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }}
+            </style>
+        </head>
+        <body>
+            <h2>📜 Лог-файл: {safe_filename}</h2>
+            <pre>{log_content}</pre>
+            <a href="/logs/">⬅️ Назад до списку логів</a>
+        </body>
+        </html>
+        """
+    raise HTTPException(status_code=404, detail="❌ Файл не знайдено")
 
 
 
