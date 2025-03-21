@@ -18,6 +18,7 @@ from google.auth.transport.requests import Request as GoogleRequest
 import random
 import hashlib
 import urllib.parse
+from datetime import datetime
 
 # 🔹 Конфігурація
 MASTER_SHEET_ID = "1z16Xcj_58R2Z-JGOMuyx4GpVdQqDn1UtQirCxOrE_hc"
@@ -34,23 +35,17 @@ for dir_path in [XML_DIR, os.path.dirname(DEBUG_LOG_FILE)]:
 
 
 
-# 🔹 Функція логування
-def log_to_file(content):
+def get_log_filename():
+    """ Генерує унікальне ім'я лог-файлу на основі часу запуску """
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    return os.path.join(LOG_DIR, f"log_{timestamp}.html")
+
+def log_to_file(content, log_filename):
+    """ Логування в унікальний файл """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"[{timestamp}] {content}\n"
 
-    # 🔹 Автоматичне форматування за ключовими словами
-    if "✅" in content:
-        content = f'<span style="color:green;">{content}</span>'
-    elif "⚠️" in content:
-        content = f'<span style="color:orange;">{content}</span>'
-    elif "❌" in content:
-        content = f'<span style="color:red;">{content}</span>'
-    elif "🔄" in content:
-        content = f'<span style="color:blue;">{content}</span>'
-
-    log_entry = f"[{timestamp}] {content}<br>\n"
-
-    with open(DEBUG_LOG_FILE, "a", encoding="utf-8") as f:
+    with open(log_filename, "a", encoding="utf-8") as f:
         f.write(log_entry)
 
 # 🔹 Авторизація Google Sheets
@@ -127,8 +122,11 @@ def clean_price(value):
 # 🔹 Функція генерації XML
 # 🔹 Функція для створення XML
 def create_xml(supplier_id, supplier_name, sheet_id, columns):
+    """ Генерація XML з унікальним лог-файлом """
+    log_filename = get_log_filename()  # Генеруємо окремий лог
     xml_file = os.path.join(XML_DIR, f"{supplier_id}.xml")
-    log_to_file(f"📥 Обробка: {supplier_name} ({sheet_id})")
+
+    log_to_file(f"📥 Обробка: {supplier_name} ({sheet_id})", log_filename)
 
     retry_count = 0
     max_retries = 5  # Спроба до 5 разів при помилці 429
@@ -203,7 +201,7 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns):
                 log_to_file(f"❌ Помилка доступу до {supplier_name}: {e}")
                 return
 
-    log_to_file(f"❌ Всі {max_retries} спроби обробити {supplier_name} провалилися.")
+    log_to_file(f"✅ XML {xml_file} збережено", log_filename)
 
 
 def get_price_hash(sheet):
@@ -367,12 +365,12 @@ os.makedirs(os.path.join(LOG_DIR, "debug_logs"), exist_ok=True)  # Виправ�
 @app.get("/logs/", response_class=HTMLResponse)
 def list_logs(request: Request):
     """
-    Виводить список файлів логів у вигляді HTML-таблиці
+    Виводить список всіх файлів логів у вигляді HTML-таблиці
     """
     try:
         log_files = [
-        {"name": f, "size": os.path.getsize(os.path.join(LOG_DIR, f))}
-        for f in os.listdir(LOG_DIR) if os.path.isfile(os.path.join(LOG_DIR, f))
+            {"name": f, "size": os.path.getsize(os.path.join(LOG_DIR, f))}
+            for f in sorted(os.listdir(LOG_DIR), reverse=True) if f.startswith("log_") and f.endswith(".html")
         ]
     except FileNotFoundError:
         log_files = []
