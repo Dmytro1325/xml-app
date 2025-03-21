@@ -8,7 +8,7 @@
         pre { background: white; padding: 20px; border-radius: 8px;
               box-shadow: 0 0 10px rgba(0,0,0,0.1); overflow-x: auto;
               white-space: pre-wrap; max-height: 80vh; overflow-y: auto; }
-        .container { max-width: 800px; margin: auto; }
+        .container { max-width: 1000px; margin: auto; }
         .btn { display: inline-block; margin-top: 10px; padding: 10px 15px;
                background: purple; color: white; text-decoration: none; border-radius: 5px; }
     </style>
@@ -16,7 +16,7 @@
 <body>
     <div class="container">
         <h2>📜 Лог-файл: {{ filename }}</h2>
-        <pre>{{ log_content }}</pre>
+        <pre>{{ log_content | replace("\n", "<br>") | safe }}</pre>
         <a href="/logs/" class="btn">⬅️ Назад до списку логів</a>
         <a href="/logs/download/{{ filename }}" class="btn">⬇️ Завантажити</a>
     </div>
