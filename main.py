@@ -21,7 +21,7 @@ import hashlib
 # 🔹 Конфігурація
 MASTER_SHEET_ID = "1z16Xcj_58R2Z-JGOMuyx4GpVdQqDn1UtQirCxOrE_hc"
 XML_DIR = "/output"
-LOG_DIR = "/app/logs"
+LOG_DIR = "/logs"
 DEBUG_LOG_FILE = os.path.join(LOG_DIR, "debug_logs", "debug_log.html")
 UPDATE_INTERVAL = 1800  # 30 хвилин
 price_hash_cache = {}
@@ -361,6 +361,9 @@ def list_logs(request: Request):
         log_files = []
 
     return templates.TemplateResponse("log_list.html", {"request": request, "logs": log_files})
+
+app.mount("/logs/", StaticFiles(directory=os.path.abspath(LOG_DIR)), name="logs")
+
 
 @app.get("/logs/view/{filename}", response_class=HTMLResponse)
 def view_log(filename: str):
