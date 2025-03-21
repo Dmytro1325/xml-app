@@ -376,39 +376,38 @@ app.mount("/logs/", StaticFiles(directory=os.path.abspath(LOG_DIR)), name="logs"
 
 @app.get("/logs/{filename}", response_class=HTMLResponse)
 def view_log(filename: str):
-    """
-    Відображає вміст лог-файлу у браузері з покращеним форматуванням.
-    """
-    safe_filename = urllib.parse.unquote(filename)  # Розкодування URL (якщо містить пробіли або спецсимволи)
+    safe_filename = urllib.parse.unquote(filename)
     file_path = os.path.join(LOG_DIR, safe_filename)
 
-    # Безпека: перевіряємо, чи файл знаходиться в межах LOG_DIR
-    if not file_path.startswith(os.path.abspath(LOG_DIR)):
-        raise HTTPException(status_code=403, detail="⛔ Доступ заборонено!")
+    print(f"🔎 Перевірка шляху: {file_path}")  # ДОДАЙ ЦЕ
 
-    if os.path.exists(file_path):
-        with open(file_path, "r", encoding="utf-8") as file:
-            log_content = file.read().replace("\n", "<br>")
+    if not os.path.exists(file_path):
+        print("❌ Файл не знайдено!")  # ДОДАЙ ЦЕ
+        raise HTTPException(status_code=404, detail="❌ Файл не знайдено")
 
-        return f"""
-        <!DOCTYPE html>
-        <html lang="uk">
-        <head>
-            <meta charset="UTF-8">
-            <title>Лог-файл: {safe_filename}</title>
-            <style>
-                body {{ font-family: monospace; background: #f4f4f4; margin: 20px; }}
-                pre {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }}
-            </style>
-        </head>
-        <body>
-            <h2>📜 Лог-файл: {safe_filename}</h2>
-            <pre>{log_content}</pre>
-            <a href="/logs/">⬅️ Назад до списку логів</a>
-        </body>
-        </html>
-        """
-    raise HTTPException(status_code=404, detail="❌ Файл не знайдено")
+    with open(file_path, "r", encoding="utf-8") as file:
+        log_content = file.read()
+
+    return f"""
+    <!DOCTYPE html>
+    <html lang="uk">
+    <head>
+        <meta charset="UTF-8">
+        <title>Лог-файл: {safe_filename}</title>
+        <style>
+            body {{ font-family: monospace; background: #f4f4f4; margin: 20px; }}
+            pre {{ background: white; padding: 20px; border-radius: 8px; 
+                box-shadow: 0 0 10px rgba(0,0,0,0.1); overflow-x: auto; 
+                white-space: pre-wrap; max-height: 80vh; overflow-y: auto; }}
+        </style>
+    </head>
+    <body>
+        <h2>📜 Лог-файл: {safe_filename}</h2>
+        <pre>{log_content}</pre>
+        <a href="/logs/">⬅️ Назад до списку логів</a>
+    </body>
+    </html>
+    """
 
 app.mount("/logs/", StaticFiles(directory=os.path.abspath(LOG_DIR)), name="logs")
 
