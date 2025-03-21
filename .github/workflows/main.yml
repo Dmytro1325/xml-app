@@ -3,7 +3,7 @@ name: Deploy Docker Container
 on:
   push:
     branches:
-      - main  # Запускати деплой при пуші в main
+      - develop  # Запускати деплой при пуші в main
 
 jobs:
   deploy:

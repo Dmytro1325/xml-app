@@ -68,14 +68,12 @@
             <tr>
                 <th>Ім'я файлу</th>
                 <th>Розмір (байт)</th>
-                <th>Тип</th>
                 <th>Перегляд</th>
             </tr>
             {% for log in logs %}
             <tr>
                 <td>{{ log.name }}</td>
                 <td>{{ log.size }}</td>
-                <td>{{ log.type }}</td>
                 <td><a class="open-link" href="/logs/{{ log.name }}">🔍 Відкрити</a></td>
             </tr>
             {% endfor %}
