@@ -15,7 +15,7 @@
             padding: 15px;
             border-radius: 8px;
             box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
-            white-space: pre-wrap; /* ВАЖЛИВО: ЗБЕРІГАЄ ВІДСТУПИ ТА ПЕРЕНОСИ */
+            white-space: pre-wrap;
             font-family: monospace;
             line-height: 1.5;
         }
@@ -27,7 +27,7 @@
 <body>
     <h2>📜 Лог-файл: {{ filename }}</h2>
     <div class="log-container">
-        {{ log_content | safe }}
+        {{ log_content | safe }}  <!-- ВАЖЛИВО! Щоб HTML форматування працювало -->
     </div>
 </body>
 </html>

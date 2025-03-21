@@ -41,9 +41,20 @@ def get_log_filename():
     return os.path.join(LOG_DIR, f"log_{timestamp}.html")
 
 def log_to_file(content, log_filename):
-    """ Записує лог у файл з переносами рядків """
+    """ Записує лог у файл із HTML-форматуванням """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = f"[{timestamp}] {content}\n"  # ОБОВ'ЯЗКОВО '\n' В КІНЦІ
+
+    # 🔹 Автоматичне форматування за ключовими словами
+    if "✅" in content:
+        content = f'<span style="color:green;">{content}</span>'
+    elif "⚠️" in content:
+        content = f'<span style="color:orange;">{content}</span>'
+    elif "❌" in content:
+        content = f'<span style="color:red;">{content}</span>'
+    elif "🔄" in content:
+        content = f'<span style="color:blue;">{content}</span>'
+
+    log_entry = f"[{timestamp}] {content}<br>\n"
 
     with open(log_filename, "a", encoding="utf-8") as f:
         f.write(log_entry)
