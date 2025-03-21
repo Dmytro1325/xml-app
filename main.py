@@ -338,11 +338,11 @@ def delete_all_files():
         os.remove(os.path.join(XML_DIR, file))
     return {"status": "success", "message": "Всі файли у папці output видалено."}
 
-@app.get("/logs/debug", response_class=HTMLResponse)
-def view_debug_log():
-    if os.path.exists(DEBUG_LOG_FILE):
-        return FileResponse(DEBUG_LOG_FILE)
-    raise HTTPException(status_code=404, detail="Файл логів не знайдено.")
+#@app.get("/logs/debug", response_class=HTMLResponse)
+#def view_debug_log():
+#    if os.path.exists(DEBUG_LOG_FILE):
+#        return FileResponse(DEBUG_LOG_FILE)
+#    raise HTTPException(status_code=404, detail="Файл логів не знайдено.")
 
 
 
@@ -375,39 +375,24 @@ app.mount("/logs/", StaticFiles(directory=os.path.abspath(LOG_DIR)), name="logs"
 
 
 @app.get("/logs/{filename}", response_class=HTMLResponse)
-def view_log(filename: str):
+def view_log(request: Request, filename: str):
+    """
+    Відображає вміст лог-файлу у браузері через шаблон
+    """
     safe_filename = urllib.parse.unquote(filename)
     file_path = os.path.join(LOG_DIR, safe_filename)
 
-    print(f"🔎 Перевірка шляху: {file_path}")  # ДОДАЙ ЦЕ
-
     if not os.path.exists(file_path):
-        print("❌ Файл не знайдено!")  # ДОДАЙ ЦЕ
         raise HTTPException(status_code=404, detail="❌ Файл не знайдено")
 
     with open(file_path, "r", encoding="utf-8") as file:
         log_content = file.read()
 
-    return f"""
-    <!DOCTYPE html>
-    <html lang="uk">
-    <head>
-        <meta charset="UTF-8">
-        <title>Лог-файл: {safe_filename}</title>
-        <style>
-            body {{ font-family: monospace; background: #f4f4f4; margin: 20px; }}
-            pre {{ background: white; padding: 20px; border-radius: 8px; 
-                box-shadow: 0 0 10px rgba(0,0,0,0.1); overflow-x: auto; 
-                white-space: pre-wrap; max-height: 80vh; overflow-y: auto; }}
-        </style>
-    </head>
-    <body>
-        <h2>📜 Лог-файл: {safe_filename}</h2>
-        <pre>{log_content}</pre>
-        <a href="/logs/">⬅️ Назад до списку логів</a>
-    </body>
-    </html>
-    """
+    return templates.TemplateResponse("log_view.html", {
+        "request": request,
+        "filename": safe_filename,
+        "log_content": log_content
+    })
 
 app.mount("/logs/", StaticFiles(directory=os.path.abspath(LOG_DIR)), name="logs")
 
