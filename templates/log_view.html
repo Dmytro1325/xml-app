@@ -3,53 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Лог-файл: {{ filename }}</title>
+    <title>Лог: {{ filename }}</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
             margin: 20px;
-            color: #333;
+            background-color: #f8f9fa;
         }
-        .container {
-            max-width: 90%;
-            margin: 0 auto;
+        .log-container {
             background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        h2 {
-            text-align: center;
-        }
-        pre {
-            background: #1e1e1e;
-            color: #dcdcdc;
             padding: 15px;
             border-radius: 8px;
-            overflow-x: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            white-space: pre-wrap; /* ВАЖЛИВО: ЗБЕРІГАЄ ВІДСТУПИ ТА ПЕРЕНОСИ */
             font-family: monospace;
+            line-height: 1.5;
         }
-        .back-link {
-            display: block;
-            margin-top: 10px;
-            text-align: center;
-            font-size: 16px;
-            text-decoration: none;
-            color: #007BFF;
-        }
-        .back-link:hover {
-            text-decoration: underline;
+        h2 {
+            color: #343a40;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>📜 Лог-файл: {{ filename }}</h2>
-        <pre>{{ log_content | safe }}</pre>
-        <a href="/logs/" class="back-link">⬅️ Назад до списку логів</a>
+    <h2>📜 Лог-файл: {{ filename }}</h2>
+    <div class="log-container">
+        {{ log_content | safe }}
     </div>
 </body>
 </html>
