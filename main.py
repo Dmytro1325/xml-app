@@ -31,6 +31,9 @@ price_hash_cache = {}
 for dir_path in [XML_DIR, os.path.dirname(DEBUG_LOG_FILE)]:
     os.makedirs(dir_path, exist_ok=True)
 
+
+
+
 # 🔹 Функція логування
 def log_to_file(content):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -348,6 +351,10 @@ async def startup_event():
     asyncio.ensure_future(periodic_update())  # Запускаємо фоновий процес оновлення XML
 
 
+# 🔹 Створення директорій для логів
+os.makedirs(LOG_DIR, exist_ok=True)
+os.makedirs(os.path.join(LOG_DIR, "debug_logs"), exist_ok=True)  # Виправлення для вкладених папок
+
 @app.get("/logs/", response_class=HTMLResponse)
 def list_logs(request: Request):
     """
@@ -356,12 +363,13 @@ def list_logs(request: Request):
     try:
         log_files = [
             {"name": f, "size": os.path.getsize(os.path.join(LOG_DIR, f))}
-            for f in os.listdir(LOG_DIR) if f.endswith(".log") or f.endswith(".txt") or f.endswith(".html")
+            for f in os.listdir(LOG_DIR)
         ]
     except FileNotFoundError:
         log_files = []
 
     return templates.TemplateResponse("log_list.html", {"request": request, "logs": log_files})
+
 
 app.mount("/logs/", StaticFiles(directory=os.path.abspath(LOG_DIR)), name="logs")
 
