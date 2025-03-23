@@ -204,8 +204,9 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename):
                 rrp = clean_price(safe_get_value(row, columns.get("RRP")))
                 currency = safe_get_value(row, columns.get("Currency"), "UAH")
 
-                if not product_id or not name or not price:
-                    log_to_file(f"❌ Пропускаємо товар без ID, Name або Price: {row}", log_filename)
+                # ❌ Пропускаємо, якщо ціна ≤ 0 або відсутні обов’язкові поля
+                if not product_id or not name or not price or int(price) <= 0:
+                    log_to_file(f"❌ Пропускаємо товар (некоректні дані або ціна = 0): id='{product_id}', name='{name}', price='{price}'", log_filename)
                     skipped_count += 1
                     continue
 
