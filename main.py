@@ -204,8 +204,9 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename):
                 rrp = clean_price(safe_get_value(row, columns.get("RRP")))
                 currency = safe_get_value(row, columns.get("Currency"), "UAH")
 
-                if not product_id or not name or not price:
-                    log_to_file(f"❌ Пропускаємо товар без ID, Name або Price: {row}", log_filename)
+                # ❌ Пропускаємо, якщо ціна ≤ 0 або відсутні обов’язкові поля
+                if not product_id or not name or not price or int(price) <= 0:
+                    log_to_file(f"❌ Пропускаємо товар (некоректні дані або ціна = 0): id='{product_id}', name='{name}', price='{price}'", log_filename)
                     skipped_count += 1
                     continue
 
@@ -468,10 +469,26 @@ def generate():
     log_filename = get_log_filename()
     log_to_file("🚀 [Manual Start] Генерація XML вручну розпочата", log_filename)
 
-    threading.Thread(target=lambda: [
-        create_xml(str(supplier["Post_ID"]), supplier["Supplier Name"], supplier["Google Sheet ID"], 
-                   {"ID": "A", "Name": "B", "Price": "D"}, log_filename)
-        for supplier in spreadsheet.worksheet("Sheet1").get_all_records()
-    ]).start()
+    def run_generation():
+        suppliers = spreadsheet.worksheet("Sheet1").get_all_records()
+
+        for supplier in suppliers:
+            supplier_id = str(supplier["Post_ID"])
+            supplier_name = supplier["Supplier Name"]
+            sheet_id = supplier["Google Sheet ID"]
+
+            columns = {
+                "ID": supplier["ID Column"] if supplier["ID Column"] != "-" else None,
+                "Name": supplier["Name Column"] if supplier["Name Column"] != "-" else None,
+                "Stock": supplier["Stock Column"] if supplier["Stock Column"] != "-" else None,
+                "Price": supplier["Price Column"] if supplier["Price Column"] != "-" else None,
+                "SKU": supplier["SKU Column"] if supplier["SKU Column"] != "-" else None,
+                "RRP": supplier["RRP Column"] if supplier["RRP Column"] != "-" else None,
+                "Currency": supplier["Currency Column"] if supplier["Currency Column"] != "-" else None
+            }
+
+            create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename)
+
+    threading.Thread(target=run_generation).start()
 
     return {"status": "Генерація XML запущена"}
