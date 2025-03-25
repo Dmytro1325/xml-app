@@ -198,13 +198,25 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename):
             for row in combined_data:
                 product_id = safe_get_value(row, columns.get("ID"))
                 name = safe_get_value(row, columns.get("Name"))
-                stock = safe_get_value(row, columns.get("Stock"), "true")
-                price = clean_price(safe_get_value(row, columns.get("Price"), "0"))
+                raw_price = safe_get_value(row, columns.get("Price"), "0")
+                price = clean_price(raw_price)
+
+                # 🔹 Обробка stock
+                if columns.get("Stock"):
+                    stock_raw = safe_get_value(row, columns.get("Stock"))
+                    if stock_raw.strip() in ["", "-"]:
+                        stock = "0"
+                    elif stock_raw.replace(".", "", 1).isdigit():
+                        stock = str(int(float(stock_raw)))
+                    else:
+                        stock = stock_raw
+                else:
+                    stock = "true"
+
                 sku = safe_get_value(row, columns.get("SKU"))
                 rrp = clean_price(safe_get_value(row, columns.get("RRP")))
                 currency = safe_get_value(row, columns.get("Currency"), "UAH")
 
-                # ❌ Пропускаємо, якщо ціна ≤ 0 або відсутні обов’язкові поля
                 if not product_id or not name or not price or int(price) <= 0:
                     log_to_file(f"❌ Пропускаємо товар (некоректні дані або ціна = 0): id='{product_id}', name='{name}', price='{price}'", log_filename)
                     skipped_count += 1
