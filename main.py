@@ -167,12 +167,12 @@ def clean_price(value):
 # 🔹 Функція для створення XML
 
 def create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename):
-    """ Генерація XML-файлу з обробкою помилок API """
+    """ Генерація XML-файлу з обробкою помилок API та поля наявності """
     log_to_file(f"📥 Обробка: {supplier_name} ({sheet_id})", log_filename)
 
     xml_file = os.path.join(XML_DIR, f"{supplier_id}.xml")
     retry_count = 0
-    max_retries = 5  # Максимальна кількість повторних спроб у разі помилки 429
+    max_retries = 5
 
     while retry_count < max_retries:
         try:
@@ -201,15 +201,16 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename):
                 raw_price = safe_get_value(row, columns.get("Price"), "0")
                 price = clean_price(raw_price)
 
-                # 🔹 Обробка stock
+                # 🔹 Обробка поля stock (наявність)
                 if columns.get("Stock"):
-                    stock_raw = safe_get_value(row, columns.get("Stock"))
-                    if stock_raw.strip() in ["", "-"]:
+                    raw_stock = safe_get_value(row, columns.get("Stock")).strip()
+
+                    if raw_stock in ["", "-"]:
                         stock = "0"
-                    elif stock_raw.replace(".", "", 1).isdigit():
-                        stock = str(int(float(stock_raw)))
+                    elif re.match(r"^\d+([.,]\d+)?$", raw_stock):  # Число з комою або крапкою
+                        stock = str(int(float(raw_stock.replace(",", "."))))
                     else:
-                        stock = stock_raw
+                        stock = raw_stock  # Наприклад: "є", "true"
                 else:
                     stock = "true"
 
@@ -217,6 +218,7 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename):
                 rrp = clean_price(safe_get_value(row, columns.get("RRP")))
                 currency = safe_get_value(row, columns.get("Currency"), "UAH")
 
+                # 🔴 Пропуск товарів без ID, Name або з ціною ≤ 0
                 if not product_id or not name or not price or int(price) <= 0:
                     log_to_file(f"❌ Пропускаємо товар (некоректні дані або ціна = 0): id='{product_id}', name='{name}', price='{price}'", log_filename)
                     skipped_count += 1
@@ -240,20 +242,20 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename):
 
             ET.ElementTree(root).write(xml_file, encoding="utf-8", xml_declaration=True)
             log_to_file(f"✅ XML {xml_file} збережено ({processed_count} товарів, пропущено {skipped_count})", log_filename)
-
-            return  # Вихід з функції після успішного створення XML
+            return
 
         except gspread.exceptions.APIError as e:
-            if "429" in str(e):  # Обробка перевищення ліміту API-запитів
+            if "429" in str(e):
                 retry_count += 1
-                wait_time = retry_count * 20  # Збільшення часу очікування з кожною спробою
+                wait_time = retry_count * 20
                 log_to_file(f"⚠️ Ліміт запитів перевищено для {supplier_name}. Повторна спроба {retry_count}/{max_retries} через {wait_time} сек.", log_filename)
-                time.sleep(wait_time)  # Чекаємо перед повторною спробою
+                time.sleep(wait_time)
             else:
                 log_to_file(f"❌ Помилка доступу до {supplier_name}: {e}", log_filename)
-                return  # Якщо помилка не 429, виходимо з функції
+                return
 
     log_to_file(f"❌ {supplier_name}: Всі {max_retries} спроби не вдалися. Пропускаємо.", log_filename)
+
 
 
 
