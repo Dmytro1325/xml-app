@@ -204,13 +204,12 @@ def create_xml(supplier_id, supplier_name, sheet_id, columns, log_filename):
                 # 🔹 Обробка stock
                 if columns.get("Stock"):
                     stock_raw = safe_get_value(row, columns.get("Stock"))
-                    if stock_raw.strip() == "":
+                    if stock_raw.strip() in ["", "-"]:
                         stock = "0"
                     elif stock_raw.replace(".", "", 1).isdigit():
-                        # Якщо це число (включаючи десяткове), перетворюємо в ціле
                         stock = str(int(float(stock_raw)))
                     else:
-                        stock = stock_raw  # Не число, залишаємо як є (наприклад: "є", "true")
+                        stock = stock_raw
                 else:
                     stock = "true"
 
